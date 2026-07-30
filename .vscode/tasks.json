@@ -1,0 +1,14 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build BOF",
+            "type": "shell",
+            "command": "nmake",
+            "args": [
+                "all-debug"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

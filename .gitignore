@@ -1,0 +1,73 @@
+build/
+
+# MSVC build artifacts
+*.obj
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.ipdb
+*.iobj
+
+# Debug / release folders (in case they appear elsewhere)
+Debug/
+Release/
+x64/
+x86/
+
+# =========================
+# Visual Studio
+# =========================
+
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# =========================
+# VS Code
+# =========================
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# =========================
+# NMAKE / temporary files
+# =========================
+
+*.log
+*.tlog
+*.lastbuildstate
+
+# =========================
+# Python
+# =========================
+
+__pycache__/
+*.pyc
+*.pyo
+
+# =========================
+# CMake (if added later)
+# =========================
+
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# =========================
+# OS files
+# =========================
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
