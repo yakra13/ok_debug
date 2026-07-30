@@ -1,5 +1,4 @@
-build/
-
+# build/
 # MSVC build artifacts
 *.obj
 *.exe
@@ -13,10 +12,10 @@ build/
 *.iobj
 
 # Debug / release folders (in case they appear elsewhere)
-Debug/
-Release/
-x64/
-x86/
+# /Debug/
+# Release/
+# x64/
+# x86/
 
 # =========================
 # Visual Studio
