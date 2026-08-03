@@ -1,4 +1,4 @@
-# build/
+build/
 # MSVC build artifacts
 *.obj
 *.exe

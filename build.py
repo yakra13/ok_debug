@@ -1,9 +1,18 @@
 import argparse
+import shutil
 import subprocess
 from pathlib import Path
-from typing import Final, Literal
+from typing import Final, Literal, TypeAlias
 import os
 import sys
+
+Arch: TypeAlias   = Literal['x64', 'x86']
+Config: TypeAlias = Literal['debug', 'release']
+
+BUILD_DIR: Path = Path("build")
+PROJ_ROOT: Path = Path("bofs")
+
+BUILD_ERRS: dict[str, str] = {}
 
 # Debug build command x64/x86
 # cl /nologo /c /GS- /EHsc /std:c++20 /D_DEBUG /Zi /MTd /I$(COMMON) /Fo$(DEBUG_OUT)\ /Fd$(DEBUG_OUT)\ kit\_Example\bof.cpp $(MOCK)
@@ -51,23 +60,51 @@ class BuildSystem:
 
         # self._get_dev_env()
 
-        self._env['x64'] = self._get_dev_env("amd64")
-        self._env['x86'] = self._get_dev_env("x86")
+        self._env['x64'] = self._get_dev_env("x64")
+        # self._env['x86'] = self._get_dev_env("x86")
 
-    def _get_dev_env(self, arch: Literal['amd64', 'x86']) -> dict[str, str]:
-        cmd: str = (
-            rf'"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat" '
-            rf'-arch={arch} && set'
+    def _get_dev_env(self, arch: Arch) -> dict[str, str]:
+        print("Generating build environment...")
+        # vsdevcmd = r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+
+        # cmd = f'call "{vsdevcmd}" -arch={arch} && set'
+        # # print(repr(cmd))
+        # # ['cmd', '/c', cmd]
+        # try:
+        #     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+        # except subprocess.CalledProcessError as err:
+        #     print(f"Return code: {err.returncode}")
+        #     print("----- STDOUT -----")
+        #     print(err.stdout)
+        #     print("----- STDERR -----")
+        #     print(err.stderr)
+        #     sys.exit(1)
+
+
+        # env = os.environ.copy()
+
+        launch = r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1"
+
+        cmd = (
+            f"& '{launch}' -Arch {'amd64' if arch == 'x64' else arch}; "
+            "Get-ChildItem Env: | ForEach-Object { \"$($_.Name)=$($_.Value)\" }" 
         )
 
-        result = subprocess.run(['cmd', '/c', cmd], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", cmd],
+            capture_output=True,
+            text=True,
+            check=True
+        )
 
-        env = os.environ.copy()
+        env = {}
 
         for line in result.stdout.splitlines():
             if '=' in line:
                 k, v = line.split('=', 1)
-                env[k] = v
+                env[k.upper()] = v
+
+        # print(env)
 
         return env
 
@@ -99,7 +136,7 @@ class BuildSystem:
                          sources: list[Path],
                          includes: list[Path],
                          output_dir: Path,
-                         configuration: Literal['debug', 'release']) -> list[str]:
+                         configuration: Config) -> list[str]:
         
         cmd: list[str] = ["cl", "/nologo", "/c", "/GS-", "/EHsc", "/std:c++20"]
         cmd += [f"/I{str(x)}" for x in includes]
@@ -116,9 +153,10 @@ class BuildSystem:
         return cmd
 
     def _get_link_cmd(self,
+                      file_name: str,
                       obj_dir: Path,
                       output: Path,
-                      configuration: Literal['debug', 'release']) -> list[str]:
+                      configuration: Config) -> list[str]:
 
         obj_files = list(obj_dir.glob("*.obj"))
 
@@ -126,15 +164,15 @@ class BuildSystem:
             raise FileNotFoundError(f"No object files found in {obj_dir}")
 
         if configuration == 'debug':
-            cmd = ["link", "/DEBUG", f"/PDB:{output.with_suffix('.pdb')}", f"/OUT:{output}"]
+            cmd = ["link", "/DEBUG", f"/PDB:{output}\\{file_name}.pdb", f"/OUT:{output}\\{file_name}.exe"]
         else:
             cmd = ["link", "/lib", f"/out:{output}",]
 
-            cmd += [str(x) for x in obj_files]
+        cmd += [str(x) for x in obj_files]
 
         return cmd
 
-    def _validate_entry_source(self, project: Path, sources: list[Path], configuration: Literal['debug', 'release']):
+    def _validate_entry_source(self, project: Path, sources: list[Path], configuration: Config):
         name: str = project.name.casefold()
         c_entry: bool = False
 
@@ -162,13 +200,14 @@ class BuildSystem:
 
     def build(self,
               proj_name: str,
-              configuration: Literal['debug', 'release'],
-              platform: Literal['x64', 'x86']) -> str | None:
+              configuration: Config,
+              architecture: Arch) -> str | None:
 
         project: Path
         build_root: Path = Path("build")
         output_root: Path
         object_dir: Path
+        debug_build_path: Path
         sources: list[Path] = []
         includes: list[Path] = self._include_dirs
         compile_cmd: list[str] = []
@@ -194,43 +233,57 @@ class BuildSystem:
 
         
         output_root = build_root / configuration / project.name
-        object_dir = output_root / platform
+        object_dir = output_root / architecture
+        debug_build_path = build_root / configuration / architecture
 
         build_root.mkdir(parents=True, exist_ok=True)
         output_root.mkdir(parents=True, exist_ok=True)
         object_dir.mkdir(parents=True, exist_ok=True)
+        
+        debug_build_path.mkdir(parents=True, exist_ok=True)
 
         includes.append(project)
 
         compile_cmd = self._get_compile_cmd(sources, includes, object_dir, configuration)
-
         # build
         try:
             subprocess.run(
-                compile_cmd, 
+                ["powershell.exe", "-NoProfile", "-Command", ' '.join(compile_cmd)], 
                 # cwd=proj,
                 capture_output=True,
                 check=True,
                 text=True,
-                env=self._env[platform]
+                env=self._env[architecture]
             )
         except subprocess.CalledProcessError as err:
             return str(err.output)
-
-        try:
-            link_cmd = self._get_link_cmd(object_dir, build_root / configuration / platform, configuration)
         except FileNotFoundError as err:
             return str(err)
+
+        # print (result)
+        # sys.exit(0)
+
+        try:
+            link_cmd = self._get_link_cmd(
+                proj_name.casefold(),
+                object_dir,
+                debug_build_path,
+                configuration
+            )
+        except FileNotFoundError as err:
+            return str(err)
+
+        print(link_cmd)
 
         # link
         try:
             subprocess.run(
-                link_cmd, 
+                ["powershell.exe", "-NoProfile", "-Command", ' '.join(link_cmd)], 
                 # cwd=proj,
                 capture_output=True,
                 check=True,
                 text=True,
-                env=self._env[platform]
+                env=self._env[architecture]
             )
         except subprocess.CalledProcessError as err:
             return str(err.output)
@@ -484,13 +537,39 @@ class BuildSystem:
 
 #     return build_errs
 
+def clean() -> None:
+    if BUILD_DIR.exists():
+        shutil.rmtree(BUILD_DIR)
+
+def build_projects(projects: list[str], arch: Arch, config: Config):
+    
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
+    builder: BuildSystem = BuildSystem(PROJ_ROOT, BUILD_DIR, includes)
+
+    print("Building BOFs")
+
+    for p in projects_list:
+        # TODO print building p ... result SUCCESS SKIP FAIL
+        # how to determine skip? maybe not necessary since argparse gathering the directories
+        print(f"{p} ... ", end='', flush=True)
+
+        if res := builder.build(p, config, arch):
+            BUILD_ERRS[p] = res
+            print("FAIL")
+        else:
+            print("SUCCESS")
+
+def compile_scripts():
+    pass
+
+def print_error_report() -> None:
+    print("Build errors")
+
+    for k, v in BUILD_ERRS.items():
+        print(f"\n{k}\n{'-'*20}\n{v}")
 
 if __name__ == "__main__":
-
-    build_dir: Path = Path("build")
-    project_root: Path = Path("bofs")
-    build_errs: dict[str, str] = {}
-
     projects_list: list[str] = []
     scripts_only: bool = False
 
@@ -498,30 +577,40 @@ if __name__ == "__main__":
         Path("common"),
     ]
 
-    build_dir.mkdir(parents=True, exist_ok=True)
-
-    builder = BuildSystem(project_root, build_dir, includes)
-
     parser = argparse.ArgumentParser()
 
     project_choices = sorted(
         entry.name
-        for entry in project_root.iterdir()
+        for entry in PROJ_ROOT.iterdir()
         if entry.is_dir()
     )
 
-    parser.add_argument("projects", nargs="*", choices=project_choices,
+    project_lookup = {p.casefold(): p  for p in project_choices}
+
+    parser.add_argument("projects", nargs="*",
         help="Projects to build. If omitted, all projects are built."
     )
 
     parser.add_argument("-s", "--scripts-only", action="store_true",
                         help="Skip compiling C projects and only combine CNA scripts.")
 
-    parser.add_argument("-a", "--arch", choices=['x64', 'x86'], required=True)
+    parser.add_argument("-a", "--arch", choices=['x64', 'x86'], required=False)
 
-    parser.add_argument("-c", "--config", choices=['release', 'debug'], required=True)
+    parser.add_argument("-c", "--config", choices=['clean', 'release', 'debug'], required=True)
 
     args = parser.parse_args()
+
+    invalid = [p for p in args.projects if p.casefold() not in project_lookup]
+
+    if invalid:
+        parser.error(
+            f"Unknown project(s): {', '.join(invalid)}. "
+            f"Valid projects: {', '.join(project_choices)}"
+        )
+
+    if args.config in ("debug", "release") and args.arch is None:
+        parser.error("--arch is required for debug and release builds.")
+    
 
     # TODO -s overrides all building
     # TODO no scripts version?
@@ -531,20 +620,20 @@ if __name__ == "__main__":
     else:
         projects_list = project_choices.copy()
 
+    if args.config == 'clean':
+        clean()
+        sys.exit(0)
 
-    for p in projects_list:
-        # TODO print building p ... result SUCCESS SKIP FAIL
-        # how to determine skip? maybe not necessary since argparse gathering the directories
-        if res := builder.build(p, args.config, args.arch):
-            build_errs[p] = res
-            # TODO print FAIL
-        else:
-            # TODO print SUCCESS
-            pass
+    if not args.scripts_only:
+        build_projects(projects_list, args.arch, args.config)
 
     # TODO: compile scripts
         
-    # TODO: print build errors
+    if BUILD_ERRS:
+       print_error_report()
+       sys.exit(1)
+
+    sys.exit(0)
 
     # BUILD_DIR.mkdir(parents=True, exist_ok=True)
 

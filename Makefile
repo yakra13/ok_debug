@@ -16,7 +16,7 @@ $(DEBUG_OUT):
 	@if not exist "$(DEBUG_OUT)" mkdir "$(DEBUG_OUT)"
 
 $(DEBUG_OUT)\example.exe: $(DEBUG_OUT)
-	$(CXX) $(CFLAGS) /I$(COMMON) /Fo$(DEBUG_OUT)\ /Fd$(DEBUG_OUT)\ kit\_Example\bof.cpp $(MOCK)
+	$(CXX) $(CFLAGS) /I$(COMMON) /Fo$(DEBUG_OUT)\ /Fd$(DEBUG_OUT)\ bofs\_Example\bof.cpp $(MOCK)
 
 	$(LD) /DEBUG /PDB:$(DEBUG_OUT)\example.pdb /OUT:$@ $(DEBUG_OUT)\*.obj
 # 	$(CXX) /DEBUG /OUT:$@ $(DEBUG_OUT)\*.obj
