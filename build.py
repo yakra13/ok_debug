@@ -1,84 +1,84 @@
 import argparse
+import itertools
+import json
+import os
 import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Final, Literal, TypeAlias
-import os
-import sys
 
 Arch: TypeAlias   = Literal['x64', 'x86']
 Config: TypeAlias = Literal['debug', 'release']
 
-BUILD_DIR: Path = Path("build")
-PROJ_ROOT: Path = Path("bofs")
+S_CLEAN: Final[str]   = 'clean'
+S_DEBUG: Final[str]   = 'debug'
+S_RELEASE: Final[str] = 'release'
+S_SCRIPT_ONLY: Final[str]  = 'script-only'
+
+PROJECT_ROOT: Path = Path(__file__).resolve().parent
+
+BOFS_DIR: Path    = Path("bofs")
+BUILD_DIR: Path   = Path("build")
+DEBUG_DIR: Path   = BUILD_DIR / S_DEBUG
+RELEASE_DIR: Path = BUILD_DIR / S_RELEASE
+
+CACHE_DIR: Path = BUILD_DIR / ".cache"
+
+CLEAN_KEEPS: set[str] = {".cache"}
+
+ENV_FILES: dict [Arch, Path] = {
+    'x64': CACHE_DIR / "env_x64.json",
+    'x86': CACHE_DIR / "env_x86.json"
+}
+
+SCRIPTS_DIR: Path          = Path("scripts")
+CNA_LIB_DIR: Path          = SCRIPTS_DIR / "lib"
+MAIN_SCRIPT_FILE: Path     = CNA_LIB_DIR / "main.cna"
+COMPILED_SCRIPT_FILE: Path = RELEASE_DIR / "OperatorsKit.cna"
 
 BUILD_ERRS: dict[str, str] = {}
+INCLUDES: list[Path] = [
+    Path("common"),
+]
 
-# Debug build command x64/x86
-# cl /nologo /c /GS- /EHsc /std:c++20 /D_DEBUG /Zi /MTd /I$(COMMON) /Fo$(DEBUG_OUT)\ /Fd$(DEBUG_OUT)\ kit\_Example\bof.cpp $(MOCK)
-# link /DEBUG /PDB:$(DEBUG_OUT)\example.pdb /OUT:$@ $(DEBUG_OUT)\*.obj
-# release build command x64/x86
-# CL_CMD: Final[list[str]] = [
-#     "cl",
-#     "/nologo",
-#     "/c",
-#     "/Od",
-#     "/W0",
-#     "/GS-",
-#     "/Tc"
-# ]
+MOCK_PATH: Path = Path(r"common\base\mock.cpp")
 
-# BOFS_DIR: Path = Path("bofs")
+CL_BASE_CMD: list[str]      = ["cl", "/nologo", "/c", "/GS-", "/EHsc", "/std:c++20"]
+CL_DEBUG_FLAGS: list[str]   = ["/D_DEBUG", "/Zi", "/MTd"]
+CL_RELEASE_FLAGS: list[str] = ["/Od", "/W0", "/MT"]
 
-# SCRIPTS_DIR: Path = Path("scripts")
+POWERSHELL_CMD: list[str] = ["powershell.exe", "-NoProfile", "-Command"]
 
-# BUILD_DIR: Path = Path("build")
-# COMMON_DIR: Path = Path("common")
+DEV_SHELL_PATH: Final[str] = r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1"
 
-# DEBUG: Final[str] = "debug"
-# RELEASE: Final[str] = "release"
+C_RED: Final[str]    = "\033[91m"
+C_GREEN: Final[str]  = "\033[92m"
+C_YELLOW: Final[str] = "\033[93m"
+C_RESET: Final[str]  = "\033[0m"
 
 class BuildSystem:
-    # _DEBUG: Final[str] = "debug"
-    # _RELEASE: Final[str] = "release"
-
-    def __init__(self,
-                #  arch: Literal['x64', 'x86'],
-                 root_dir: Path,
-                 build_dir: Path,
-                 include_dirs: list[Path]):
-        
-        # self._arch = arch
+    def __init__(self):
         self._env: dict[str, dict[str, str]] = {}
-        self._root_dir: Path = root_dir
-        self._build_dir: Path = build_dir
-        self._include_dirs: list[Path] = include_dirs
 
-        # self._project_root: Path
-        # self._project_sources: list[Path] = []
-        # self._compile_cmd: list[str] = []
+    def _load_env_from_cache(self, arch: Arch):
+        if ENV_FILES[arch].is_file():
+            with ENV_FILES[arch].open('r', encoding='utf-8') as f:
+                self._env[arch] = json.load(f)
+        else:
+            print(f"Generating {arch} build environment...")
+            
+            self._env[arch] = self._get_dev_env(arch)
 
-        # self._get_dev_env()
+            ENV_FILES[arch].parent.mkdir(parents=True, exist_ok=True)
 
-        # TODO create build/.cache/ 
-        # store env_x64.json and 86 and mock.obj there
-        # only build those once locally
-        # gitignore build or .cache
-        # maybe only store?:
-        # PATH
-        # INCLUDE
-        # LIB
-        # LIBPATH
-        self._env['x64'] = self._get_dev_env("x64")
-        # self._env['x86'] = self._get_dev_env("x86")
+            with ENV_FILES[arch].open('w', encoding='utf-8') as f:
+                json.dump(self._env[arch], f, indent=2)
 
     def _get_dev_env(self, arch: Arch) -> dict[str, str]:
-        print("Generating build environment...")
-
-        launch = r"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1"
-
         cmd = (
-            f"& '{launch}' -Arch {'amd64' if arch == 'x64' else arch}; "
+            f"& '{DEV_SHELL_PATH}' -Arch {'amd64' if arch == 'x64' else arch}; "
             "Get-ChildItem Env: | ForEach-Object { \"$($_.Name)=$($_.Value)\" }" 
         )
 
@@ -89,7 +89,7 @@ class BuildSystem:
             check=True
         )
 
-        env = {} # os.environ.copy()
+        env = os.environ.copy() # {}
 
         for line in result.stdout.splitlines():
             if '=' in line:
@@ -101,11 +101,11 @@ class BuildSystem:
     def _get_project_path(self, proj_name: str) -> Path:
         proj_name = proj_name.casefold()
 
-        for entry in self._root_dir.iterdir():
+        for entry in BOFS_DIR.iterdir():
             if entry.is_dir() and entry.name.casefold() == proj_name:
                 return entry
 
-        raise FileNotFoundError(f"'{proj_name}' not found in '{self._root_dir}'")
+        raise FileNotFoundError(f"'{proj_name}' not found in '{BOFS_DIR}'")
 
     def _get_source_files(self, project: Path) -> list[Path]:
         sources: list[Path] = []
@@ -122,47 +122,44 @@ class BuildSystem:
     
         return sources
 
-    def _get_compile_cmd(self,
-                         sources: list[Path],
-                         includes: list[Path],
-                         output_dir: Path,
-                         configuration: Config) -> list[str]:
+    def _get_compile_cmd(self, sources: list[Path], out_dir: Path, cfg: Config) -> list[str]:
+        cmd: list[str] = CL_BASE_CMD.copy()
+        cmd += [f"/I{str(x)}" for x in INCLUDES]
+        cmd += [f"/Fo{out_dir}\\", f"/Fd{out_dir}\\"]
         
-        cmd: list[str] = ["cl", "/nologo", "/c", "/GS-", "/EHsc", "/std:c++20"]
-        cmd += [f"/I{str(x)}" for x in includes]
-        cmd += [f"/Fo{output_dir}\\", f"/Fd{output_dir}\\"]
-        
-        if configuration == "debug":
-            cmd += ["/D_DEBUG", "/Zi", "/MTd"]
-            sources.append(Path(r"common\base\mock.cpp"))
+        if cfg == S_DEBUG:
+            cmd += CL_DEBUG_FLAGS
+            # Append mock.cpp required for debug builds
+            sources.append(MOCK_PATH)
         else:
-            cmd += ["/Od", "/W0", "/MT"]
+            cmd += CL_RELEASE_FLAGS
 
         cmd += [str(x) for x in sources]
 
         return cmd
 
-    def _get_link_cmd(self,
-                      file_name: str,
-                      obj_dir: Path,
-                      output: Path,
-                      configuration: Config) -> list[str]:
+    def _get_link_cmd(self, file_name: str, obj_dir: Path, out_dir: Path, cfg: Config) -> list[str]:
+        obj_files: list[Path] = list(obj_dir.glob("*.obj"))
 
-        obj_files = list(obj_dir.glob("*.obj"))
+        full_path: Path = out_dir / file_name
+
+        pdb: Path = full_path.with_suffix(".pdb")
+        exe: Path = full_path.with_suffix(".exe")
+        obj: Path = full_path.with_suffix(".o")
 
         if not obj_files:
             raise FileNotFoundError(f"No object files found in {obj_dir}")
 
-        if configuration == 'debug':
-            cmd = ["link", "/DEBUG", f"/PDB:{output}\\{file_name}.pdb", f"/OUT:{output}\\{file_name}.exe"]
+        if cfg == S_DEBUG:
+            cmd = ["link", "/DEBUG", f"/PDB:{pdb}", f"/OUT:{exe}"]
         else:
-            cmd = ["link", "/lib", f"/out:{output}",]
+            cmd = ["link", "/lib", f"/out:{obj}",]
 
         cmd += [str(x) for x in obj_files]
 
         return cmd
 
-    def _validate_entry_source(self, project: Path, sources: list[Path], configuration: Config):
+    def _validate_entry_source(self, project: Path, sources: list[Path], cfg: Config):
         name: str = project.name.casefold()
         c_entry: bool = False
 
@@ -179,7 +176,7 @@ class BuildSystem:
                 c_entry = True
 
         if  c_entry:
-            if configuration == 'debug':
+            if cfg == S_DEBUG:
                 raise FileNotFoundError(
                     f"Compiling in debug requires {project.name}.cpp but only {project.name}.c source was found."
                 )
@@ -188,185 +185,325 @@ class BuildSystem:
 
         raise FileNotFoundError(f"{project.name}.cpp or {project.name}.c not found in {project}")
 
-    def build(self,
-              proj_name: str,
-              configuration: Config,
-              architecture: Arch) -> str | None:
+    def _run_with_spinner(self, cmd: list[str], env: dict[str, str]) -> tuple[int, str, str]:
+        spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
 
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+
+        while proc.poll() is None:
+            print(f"{next(spinner)}", end="", flush=True)
+            time.sleep(0.08)
+            print("\b", end="", flush=True)
+
+        stdout, stderr = proc.communicate()
+
+        return proc.returncode, stdout, stderr
+
+    def build(self, proj_name: str, cfg: Config, arch: Arch) -> str | None:
         project: Path
-        build_root: Path = Path("build")
         output_root: Path
         object_dir: Path
-        debug_build_path: Path
-        sources: list[Path] = []
-        includes: list[Path] = self._include_dirs
+        debug_out: Path
+
+        sources: list[Path]    = []
         compile_cmd: list[str] = []
-        link_cmd: list[str] = []
+        link_cmd: list[str]    = []
+
+        self._load_env_from_cache(arch)
 
         try:
             project = self._get_project_path(proj_name)
         except FileNotFoundError as err:
-            # TODO
             return str(err)
         
         try:
             sources = self._get_source_files(project)
         except FileNotFoundError as err:
-            # TODO
             return str(err)
 
         try:
-            self._validate_entry_source(project, sources, configuration)
+            self._validate_entry_source(project, sources, cfg)
         except FileNotFoundError as err:
-            # TODO
             return str(err)
 
-        
-        output_root = build_root / configuration / project.name
-        object_dir = output_root / architecture
-        debug_build_path = build_root / configuration / architecture
+        #--------------------------------------
+        #      Setup / create directories
+        #--------------------------------------        
 
-        build_root.mkdir(parents=True, exist_ok=True)
+        output_root = BUILD_DIR / cfg / project.name
+        debug_out   = BUILD_DIR / cfg / arch
+        object_dir  = output_root / arch
+
         output_root.mkdir(parents=True, exist_ok=True)
+        debug_out.mkdir(parents=True, exist_ok=True)
         object_dir.mkdir(parents=True, exist_ok=True)
-        # TODO only make relevent dirs?
-        debug_build_path.mkdir(parents=True, exist_ok=True)
 
-        includes.append(project)
+        # Append this projects directory to the include directories
+        INCLUDES.append(project)
 
-        compile_cmd = self._get_compile_cmd(sources, includes, object_dir, configuration)
-        # build
-        try:
-            subprocess.run(
-                ["powershell.exe", "-NoProfile", "-Command", ' '.join(compile_cmd)], 
-                # cwd=proj,
-                capture_output=True,
-                check=True,
-                text=True,
-                env=self._env[architecture]
-            )
-        except subprocess.CalledProcessError as err:
-            return str(err.output)
-        except FileNotFoundError as err:
-            return str(err)
+        #--------------------------------------
+        #           Build the project
+        #--------------------------------------
+
+        compile_cmd = self._get_compile_cmd(sources, object_dir, cfg)
+
+        # print(f"  {project.name:<30}", end='', flush=True)
+
+        ret, stdout, stderr = self._run_with_spinner(
+            POWERSHELL_CMD + [' '.join(compile_cmd)],
+            self._env[arch]
+        )
+
+        if ret != 0:
+            return stderr or stdout
+
+        #--------------------------------------
+        #           Link the project
+        #--------------------------------------
 
         try:
             link_cmd = self._get_link_cmd(
                 proj_name.casefold(),
                 object_dir,
-                debug_build_path,
-                configuration
+                debug_out,
+                cfg
             )
         except FileNotFoundError as err:
             return str(err)
+        
+        ret, stdout, stderr = self._run_with_spinner(
+            POWERSHELL_CMD +  [' '.join(link_cmd)],
+            self._env[arch]
+        )
 
-        # link
-        try:
-            subprocess.run(
-                ["powershell.exe", "-NoProfile", "-Command", ' '.join(link_cmd)], 
-                # cwd=proj,
-                capture_output=True,
-                check=True,
-                text=True,
-                env=self._env[architecture]
-            )
-        except subprocess.CalledProcessError as err:
-            return str(err.output)
+        if ret != 0:
+            return stderr or stdout
 
+        #--------------------------------------
+        #         Cleanup build files
+        #--------------------------------------
+
+        if output_root.exists():
+            shutil.rmtree(output_root)
+
+        return None
 
 def clean() -> None:
-    if BUILD_DIR.exists():
-        shutil.rmtree(BUILD_DIR)
+    if not BUILD_DIR.is_dir():
+        return
 
-def build_projects(projects: list[str], arch: Arch, config: Config):
-    
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    for path in BUILD_DIR.iterdir():
+        if path.name in CLEAN_KEEPS:
+            continue
 
-    builder: BuildSystem = BuildSystem(PROJ_ROOT, BUILD_DIR, includes)
+        if path.is_dir():
+            # Remove directory
+            shutil.rmtree(path)
+        else:
+            # Remove file
+            path.unlink()
+
+def build_projects(projects: list[str], arch: Arch, config: Config) -> dict[str, str]:
+    errors: dict[str, str] = {}
+
+    # Normalize names
+    projects = [p.casefold() for p in projects]
 
     print("Building BOFs")
 
-    for p in projects_list:
-        print(f"{p} ... ", end='', flush=True)
+    builder: BuildSystem = BuildSystem()
 
-        if res := builder.build(p, config, arch):
-            BUILD_ERRS[p] = res
-            print("FAIL")
+    for project in BOFS_DIR.iterdir():
+        if project.name.startswith('_'):
+            continue
+
+        if project.name.casefold() not in projects:
+            continue
+
+        # build returns a string on failure; None on success
+        print(f"  {project.name:<30}", end='', flush=True)
+
+        if res := builder.build(project.name, config, arch):
+            errors[project.name] = res
+            print(C_RED + "FAIL" + C_RESET)
         else:
-            print("SUCCESS")
+            print(C_GREEN + "SUCCESS" + C_RESET)
 
-def compile_scripts():
-    pass
+    return errors
 
-def print_error_report() -> None:
-    print("Build errors")
+def compile_scripts() -> bool:
+    script_files: list[Path]  = []
+    missing_files: list[Path] = []
 
-    for k, v in BUILD_ERRS.items():
-        print(f"\n{k}\n{'-'*20}\n{v}")
+    compiled_data: str = ""
 
-if __name__ == "__main__":
-    projects_list: list[str] = []
-    scripts_only: bool = False
+    print("Compiling CNA Scripts")
 
-    includes: list[Path] = [
-        Path("common"),
-    ]
+    for project in BOFS_DIR.iterdir():
+        # Skip projects starting with _
+        if project.name.startswith("_"):
+            continue
 
-    parser = argparse.ArgumentParser()
+        cna_script: Path = (project / project.name.casefold()).with_suffix(".cna")
 
-    project_choices = sorted(
-        entry.name
-        for entry in PROJ_ROOT.iterdir()
-        if entry.is_dir()
+        if cna_script.is_file():
+            script_files.append(cna_script)
+        else:
+            missing_files.append(cna_script)
+
+    if not script_files:
+        print(f"  No CNA scripts found\n  Expected:")
+
+        for file in missing_files:
+            print(C_RED + f"    {file}" + C_RESET)
+
+        return False
+
+    # Get the latest change of all the BOF scripts and base script
+    latest_change = max(p.stat().st_mtime for p in script_files)
+    latest_change = max(latest_change, MAIN_SCRIPT_FILE.stat().st_mtime)
+
+    # If the compiled script is newer then no rebuild is needed
+    if COMPILED_SCRIPT_FILE.exists() and latest_change < COMPILED_SCRIPT_FILE.stat().st_mtime:
+        if missing_files:
+            print(C_YELLOW + "Missing expected files:" + C_RESET)
+
+            for file in missing_files:
+                print(C_YELLOW + f"    {file}" + C_RESET)
+
+            return False
+
+        print(f"  {COMPILED_SCRIPT_FILE.name} already up-to-date.")
+
+        return True
+
+    # Add the base script first
+    compiled_data += MAIN_SCRIPT_FILE.read_text().strip()
+
+    for file in CNA_LIB_DIR.iterdir():
+        if file == MAIN_SCRIPT_FILE:
+            continue
+
+        if not file.is_file():
+            continue
+
+        if file.suffix != ".cna":
+            continue
+
+        comment = file.resolve().relative_to(PROJECT_ROOT)
+        content = file.read_text(encoding='utf-8').strip()
+        compiled_data += f"\n\n#\n# {comment}\n#\n\n{content}"
+
+    for project in BOFS_DIR.iterdir():
+        # Skip projects starting with _
+        if project.name.startswith("_"):
+            continue
+
+        for file in project.iterdir():
+            if file.suffix != ".cna":
+                continue
+
+            comment = file.resolve().relative_to(PROJECT_ROOT)
+            content = file.read_text(encoding='utf-8').strip()
+            compiled_data += f"\n\n#\n# {comment}\n#\n\n{content}"
+
+    if missing_files:
+        print(C_YELLOW + "  Missing expected files:" + C_RESET)
+
+        for file in missing_files:
+            print(C_YELLOW + f"    {file}" + C_RESET)
+
+        return False
+
+    COMPILED_SCRIPT_FILE.write_text(compiled_data, encoding='utf-8')
+
+    print(f"  {COMPILED_SCRIPT_FILE.name} created.")
+
+    return True
+
+def get_args() -> argparse.Namespace:
+    parser: argparse.ArgumentParser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "config",
+        choices=[S_CLEAN, S_RELEASE, S_DEBUG, S_SCRIPT_ONLY],
+        help="Build configuration"
     )
 
-    project_lookup = {p.casefold(): p  for p in project_choices}
+    parser.add_argument(
+        "-a",
+        "--arch",
+        choices=['x64', 'x86'],
+        default="x64",
+        help="Target architecure (default: x64)"
+    )
 
-    parser.add_argument("projects", nargs="*",
+    parser.add_argument(
+        "projects",
+        nargs="*",
         help="Projects to build. If omitted, all projects are built."
     )
 
-    parser.add_argument("-s", "--scripts-only", action="store_true",
-                        help="Skip compiling C projects and only combine CNA scripts.")
+    return parser.parse_intermixed_args()
 
-    parser.add_argument("-a", "--arch", choices=['x64', 'x86'], required=False)
+if __name__ == "__main__":
+    proj_choices: list[str]     = []
+    proj_list: list[str]        = []
+    proj_lookup: dict[str, str] = {}
 
-    parser.add_argument("-c", "--config", choices=['clean', 'release', 'debug'], required=True)
+    proj_choices = sorted(
+        entry.name
+        for entry in BOFS_DIR.iterdir()
+        if entry.is_dir() and not entry.name.startswith('_')
+    )
 
-    args = parser.parse_args()
+    proj_lookup = {p.casefold(): p  for p in proj_choices}
 
-    invalid = [p for p in args.projects if p.casefold() not in project_lookup]
+    args: argparse.Namespace = get_args()
 
-    if invalid:
-        parser.error(
-            f"Unknown project(s): {', '.join(invalid)}. "
-            f"Valid projects: {', '.join(project_choices)}"
-        )
-
-    if args.config in ("debug", "release") and args.arch is None:
-        parser.error("--arch is required for debug and release builds.")
-    
-
-    # TODO -s overrides all building
-    # TODO no scripts version?
-    # TODO delete the build folder for the debug objs when done?
-
-    if args.projects:
-        projects_list = args.projects
-    else:
-        projects_list = project_choices.copy()
-
-    if args.config == 'clean':
+    if args.config == S_CLEAN:
         clean()
         sys.exit(0)
 
-    if not args.scripts_only:
-        build_projects(projects_list, args.arch, args.config)
+    if args.config == S_SCRIPT_ONLY:
+        sys.exit(compile_scripts())
 
-    # TODO: compile scripts
+    invalid_projects = [p for p in args.projects if p.casefold() not in proj_lookup]
+
+    # Check provided project names exist
+    if invalid_projects:
+        print(
+            f"Unknown project(s):\n  {', '.join(invalid_projects)}\n"
+            f"Valid projects:\n  {', '.join(proj_choices)}"
+        )
+        sys.exit(False)
+
+    if args.projects:
+        proj_list = args.projects
+    else:
+        proj_list = proj_choices.copy()
+
+    errors = build_projects(proj_list, args.arch, args.config)
+
+    if errors:
+        print("\nError Report:")
         
-    if BUILD_ERRS:
-       print_error_report()
-       sys.exit(1)
+        for k, v in errors.items():
+            print(f"\n{k}\n{'-'*20}\n{C_RED + v + C_RESET}")
 
-    sys.exit(0)
+        sys.exit(False)
+
+    print("")
+
+    result = compile_scripts()
+
+    if not result:
+        sys.exit(False)
+
+    sys.exit(True)

@@ -1,0 +1,118 @@
+default:
+  interruptible: false
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PIP_INDEX_URL_RTF: ""
+  PIP_INDEX_URL_CAVE: ""
+  GIT_SUBMODULE_STRATEGY: recursive
+  CNODEF_BUILDSYS_DIR_CNOBS: ""
+  CNODEF_BUILDSYS_DIR_ARTIFACTS: ""
+  CNODEF_BUILDSYS_DIR_CODEGEN: ""
+  SECURE_ANALYZERS_PREFIX: "$DOCKER_REGISTRY/security-products"
+  SAST_EXCLUDED_PATHS: spec, test, tests, tmp, googletest
+
+workflow:
+  rules:
+    - if: ''
+      variables:
+        DOCKER_REGISTRY: ""
+        CNODEF_BUILDSYS_ARTIFACT_CURL_USER: "svc_cicd"
+        CNODEF_BUILDSYS_ARTIFACT_CURL_PASS: ""
+        CNODEF_BUILDSYS_ARTIFACT_URL: ""
+        CNODEF_BUILDSYS_CNOLIB_ARTIFACT_URL: ""
+    - if: ''
+      variables:
+        DOCKER_REGISTRY: "$CI_REGISTRY_IMAGE"
+        CNODEF_BUILDSYS_ARTIFACT_CURL_USER: ""
+        CNODEF_BUILDSYS_ARTIFACT_CURL_PASS: ""
+        CNODEF_BUILDSYS_ARTIFACT_URL: ""
+        CNODEF_BUILDSYS_CNOLIB_ARTIFACT_URL: ""
+
+
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - deploy
+
+build-msvc-x86:
+  stage: build
+  image: $DOCKER_REGISTRY/windows-msvc:vs2022
+  tags:
+    - windows
+  script:
+    - |
+      & 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\Launch-VsDevShell.ps1' -Arch x86
+    - python ./build.py
+  artifacts:
+    name: windows-msvc-x86
+    paths:
+      - Build/x86/
+      - Build/OperatorsKit.cna
+    when: on_success
+    expire_in: 15 hour
+
+build-msvc-x64:
+  stage: build
+  image: $DOCKER_REGISTRY/windows-msvc:vs2022
+  tags:
+    - windows
+  script:
+    - |
+      & 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64
+    - python ./build.py
+  artifacts:
+    name: windows-msvc-x64
+    paths:
+      - Build/x64/
+    when: on_success
+    expire_in: 15 mins
+
+test-deploy:
+  stage: deploy
+  image: $DOCKER_REGISTRY/python:3.10.19-bookworm
+  tags:
+    - linux
+  needs:
+    - job: build-msvc-x86
+      artifacts: true
+    - job: build-msvc-x64
+      artifacts: true
+  before_script: []
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - mv Build OperatorsKit
+  artifacts:
+    name: ${CI_PROJECT_NAME}
+    paths:
+      - OperatorsKit
+
+deploy-artifacts-prod:
+  stage: deploy
+  image: $DOCKER_REGISTRY/python:3.10.19-bookworm
+  tags:
+    - linux
+  needs:
+    - job: build-msvc-x86
+      artifacts: true
+    - job: build-msvc-x64
+      artifacts: true
+  before_script: []
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - export CURRENT_DATETIME=$(date +'%Y%m%d%H%M')
+    - export OUTPUT_NAME=${CI_PROJECT_NAME}.tgz
+    - export UPLOAD_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${CI_COMMIT_REF_SLUG}/${CURRENT_DATETIME}/$OUTPUT_NAME
+    - echo [*] pushing package file to $UPLOAD_URL
+    - mkdir package
+    - cp -r Build package/${CI_PROJECT_NAME}
+    - tar czvf $OUTPUT_NAME -C package ${CI_PROJECT_NAME}
+    - |
+      curl -k --location --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+           --upload-file $OUTPUT_NAME \
+           "$UPLOAD_URL"
+    - curl -f -k -u${CNODEF_BUILDSYS_ARTIFACT_CURL_USER}:${CNODEF_BUILDSYS_ARTIFACT_CURL_PASS} --upload-file $OUTPUT_NAME $CNODEF_BUILDSYS_ARTIFACT_URL/${OUTPUT_NAME}
+    - echo [*] artifacts package saved to package repository. No artifacts are left in this job.
+  rules:
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH

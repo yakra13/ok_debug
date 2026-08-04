@@ -1,4 +1,4 @@
-build/
+build/.cache/
 # MSVC build artifacts
 *.obj
 *.exe
@@ -10,6 +10,7 @@ build/
 *.idb
 *.ipdb
 *.iobj
+*.o
 
 # Debug / release folders (in case they appear elsewhere)
 # /Debug/
