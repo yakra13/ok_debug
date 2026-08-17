@@ -19,7 +19,10 @@ extern "C" {
 #include "beacon.h"
 #include "sleepmask.h"
 
-BOF_Buffer output_buffer = { 0 };
+// Global output buffer for beacon CALLBACK_OUTPUT
+// You can use CALLBACK_OUTPUT_UTF8 to send updates to CS stdout
+// Ensure to call BofBufferFree() when done to return any remaining data to CS
+BOF_Buffer outputBuffer = { 0 };
 
 BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 {
@@ -45,11 +48,12 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 		break;
 	}
 
+	// TODO: heap alloc? heap free 
 	handleInfo = (PSYSTEM_HANDLE_INFORMATION_EX)MSVCRT$malloc(handleInfoSize);
 
 	if (!handleInfo)
 	{
-		//BeaconPrintf(CALLBACK_ERROR, "Out of memory");
+		BeaconPrintf(CALLBACK_ERROR, "Out of memory");
 		goto cleanup;
 	}
 
@@ -67,7 +71,7 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 		if (!tmp)
 		{
-			//BeaconPrintf(CALLBACK_ERROR, "Out of memory");
+			BeaconPrintf(CALLBACK_ERROR, "Out of memory");
 			goto cleanup;
 		}
 
@@ -76,11 +80,7 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 	if (!NT_SUCCESS(status))
 	{
-		/*BeaconPrintf(
-			CALLBACK_ERROR,
-			"NtQuerySystemInformation failed: 0x%08X",
-			status
-		);*/
+		BeaconPrintf(CALLBACK_ERROR, "NtQuerySystemInformation failed: 0x%08X", status);
 		goto cleanup;
 	}
 
@@ -149,13 +149,13 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 		if (!NT_SUCCESS(status))
 		{
-			BeaconPrintf(
-				CALLBACK_ERROR,
-				"NtDuplicateObject failed PID=%llu Handle=%p Status=0x%08X",
-				objHandle->UniqueProcessId,
-				(PVOID)objHandle->HandleValue,
-				status
-			);
+			// BeaconPrintf(
+			// 	CALLBACK_ERROR,
+			// 	"NtDuplicateObject failed PID=%llu Handle=%p Status=0x%08X",
+			// 	objHandle->UniqueProcessId,
+			// 	(PVOID)objHandle->HandleValue,
+			// 	status
+			// );
 
 			goto iter_cleanup;
 		}
@@ -277,11 +277,12 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 			{
 				MSVCRT$sprintf_s(procHostName, MAX_PATH, "%s", "unknown");
 			}
-			BeaconPrintf(CALLBACK_OUTPUT,
-				//BofPrintf(
+			
+			BofPrintf(
+				&outputBuffer,
 				"  - { from_proc: %s, from_pid: %llu, to_proc: %s, to_pid: %llu, handle_obj: %#llx, access_rights: %#x }\n",
 				procHostName,
-				objHandle->UniqueProcessId,//KERNEL32$GetProcessId(processHandle),
+				objHandle->UniqueProcessId, //KERNEL32$GetProcessId(processHandle),
 				procNameTemp,
 				procID,
 				objHandle->HandleValue,
@@ -316,24 +317,30 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 cleanup:
 
+	if (handleInfo)
+	{
+		MSVCRT$free(handleInfo);
+	}
+
 	return foundHandles;
 }
-
-// Define the Dynamic Function Resolution declaration for the GetLastError function
-DFR(KERNEL32, GetLastError);
-#define GetLastError KERNEL32$GetLastError 
 
 void go(char* args, int len)
 {
 	int basePid = 0;
 	int targetPid = 0;
-	BYTE flags = QUERY_THREAD;
-	const char* search = "all";
-	const char* query = "thread";
-	BOOL res = FALSE;
+	BYTE flags;
+	CHAR* search;
+	CHAR* query;
+	
 	datap parser;
+	
+	BOOL result = FALSE;
 
-	if (!BofBufferInit(&output_buffer))
+	char computerName[MAX_COMPUTERNAME_LENGTH + 1] = {0};
+    DWORD nameSize = sizeof(computerName);
+
+	if (!BofBufferInit(&outputBuffer))
 	{
 		goto cleanup;
 	}
@@ -342,39 +349,95 @@ void go(char* args, int len)
 	search = BeaconDataExtract(&parser, NULL);
 	query = BeaconDataExtract(&parser, NULL);
 
-	res = GetHandlesEx(0, flags, 0);
+	if (KERNEL32$GetComputerNameA(computerName, &nameSize))
+    {
+        BofPrintf(&outputBuffer, "%s:\n", computerName);
+    }
+    else
+    {
+        BofPrintf(&outputBuffer, "UNKNOWN:\n");
+    }
 
-	if (res)
+
+	if (MSVCRT$strcmp(query, "proc") == 0)
 	{
-		BeaconPrintf(CALLBACK_OUTPUT, "Success I guess");
+		flags = QUERY_PROC;
+		BofPrintf(&outputBuffer, "  process_handles:\n");
+	}
+	else if (MSVCRT$strcmp(query, "thread") == 0)
+	{
+		flags = QUERY_THREAD;
+		BofPrintf(&outputBuffer, "  thread_handles:\n");
 	}
 	else
 	{
-		BeaconPrintf(CALLBACK_ERROR, "Failure I guess");
+		BeaconPrintf(CALLBACK_ERROR, "Please specify either 'proc' (PROCESS_HANDLE) or 'thread' (THREAD_HANDLE) as handle search options.\n");
+		goto cleanup;
 	}
 
+	if (MSVCRT$strcmp(search, "all") == 0)
+	{
+		BeaconPrintf(CALLBACK_OUTPUT_UTF8, "[*] Start enumerating all processes with handles to all other processes\n");
+		
+		result = GetHandlesEx(0, flags, 0);
+	}
+	else if (MSVCRT$strcmp(search, "h2p") == 0)
+	{
+		targetPid = BeaconDataInt(&parser);
+
+		BeaconPrintf(CALLBACK_OUTPUT_UTF8, "[*] Start enumerating all processes that have a handle to PID: [%d]\n", targetPid);
+		
+		result = GetHandlesEx(0, flags, targetPid);
+	}
+	else if (MSVCRT$strcmp(search, "p2h") == 0)
+	{
+		basePid = BeaconDataInt(&parser);
+		
+		BeaconPrintf(CALLBACK_OUTPUT_UTF8, "[*] Start enumerating handles from PID [%d] to all other processes\n", basePid);
+		
+		result = GetHandlesEx(basePid, flags, 0);
+	}
+	else
+	{
+		BeaconPrintf(CALLBACK_ERROR, "Please specify one of the following process search options: all | h2p | p2h\n");
+		
+		goto cleanup;
+	}
+
+
 cleanup:
-	if (!res)
+	if (!result)
 	{
 		BeaconPrintf(CALLBACK_ERROR, "No handle found for this search query!\n");
 	}
 
-	BofBufferFree(&output_buffer);
+	BofBufferFree(&outputBuffer);
 }
-
-	/*void sleep_mask(PBEACON_INFO info, PFUNCTION_CALL funcCall) {
-		// BeaconGateWrapper(info, funcCall);
-	}*/
-}
+} // End extern "C"
 
 // Define a main function for the debug build
 #if defined(_DEBUG) && !defined(_GTEST)
 
 int main(int argc, char* argv[])
 {
+	int reqArgCount = 4;
+
 	// Run BOF's entrypoint
 	// To pack arguments for the bof use e.g.: bof::runMocked<int, short, const char*>(go, 6502, 42, "foobar");
-	bof::runMocked<>(go);
+
+	if (argc != reqArgCount)
+	{
+		printf("Usage ... need the args");
+		return 1;
+	}
+
+	// 0 is exe name
+	// const char* search = argv[1];
+	// const char* query  = argv[2];
+	// Convert string to integer - Ignoring error checking as this part of the code does not ship
+	int pid = static_cast<int>(std::strtol(argv[3], nullptr, 10));
+
+	bof::runMocked<char*&, char*&, int&>(go, argv[1], argv[2], pid);
 
 	/* To test a sleepmask BOF, the following mockup executors can be used
 	// Mock up Beacon and run the sleep mask once

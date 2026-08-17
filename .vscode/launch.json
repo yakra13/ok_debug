@@ -1,47 +1,83 @@
 {
     "version": "0.2.0",
     "configurations": [
+        // {
+        //     "name": "Debug BOF",
+        //     "type": "cppvsdbg",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/build/debug/${input:arch}/${fileDirnameBasename}.exe",
+        //     "cwd": "${workspaceFolder}",
+        //     "stopAtEntry": false,
+        //     "console": "integratedTerminal",
+        //     "symbolSearchPath": "${workspaceFolder}"
+        // },
+        // {
+        //     "name": "Debug BOF (x64)",
+        //     "type": "cppvsdbg",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/build/debug/x64/${fileDirnameBasename}.exe",
+        //     "cwd": "${workspaceFolder}",
+        //     "stopAtEntry": false,
+        //     "console": "integratedTerminal",
+        //     "symbolSearchPath": "${workspaceFolder}"
+        // },
+        // {
+        //     "name": "Debug BOF (x86)",
+        //     "type": "cppvsdbg",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/build/debug/x86/${fileDirnameBasename}.exe",
+        //     "cwd": "${workspaceFolder}",
+        //     "stopAtEntry": false,
+        //     "console": "integratedTerminal",
+        //     "symbolSearchPath": "${workspaceFolder}"
+        // },
         {
-            "name": "Debug BOF",
+            "name": "Dbg EnumHandles x64",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/debug/${input:arch}/${fileDirnameBasename}.exe",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumhandles.exe",
+            "args":[
+                "${input:enumhandles_search}",
+                "${input:enumhandles_query}",
+                "${input:enumhandles_pid}"
+            ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
             "symbolSearchPath": "${workspaceFolder}"
         },
-        {
-            "name": "Debug BOF (x64)",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/debug/x64/${fileDirnameBasename}.exe",
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "integratedTerminal",
-            "symbolSearchPath": "${workspaceFolder}"
-        },
-        {
-            "name": "Debug BOF (x86)",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/debug/x86/${fileDirnameBasename}.exe",
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "integratedTerminal",
-            "symbolSearchPath": "${workspaceFolder}"
-        }
     ],
     "inputs": [
-    {
-        "id": "arch",
-        "type": "pickString",
-        "description": "Architecture",
-        "options": [
-            "x64",
-            "x86"
-        ],
-        "default": "x64"
-    }
-]
+        {
+            "id": "arch",
+            "type": "pickString",
+            "description": "Architecture",
+            "options": ["x64", "x86"],
+            "default": "x64"
+        },
+
+        //------------------------------------------------------------------------------
+        // EnumHandles Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumhandles_search",
+            "type": "pickString",
+            "description": "Search all processes; handles to a specific process; handles of a specific process",
+            "options": ["all", "h2p", "p2h"],
+            "default": "all"
+        },
+        {
+            "id": "enumhandles_query",
+            "type": "pickString",
+            "description": "Search for process type handles or thread type handles.",
+            "options": ["proc", "thread"],
+            "default": "proc"
+        },
+        {
+            "id": "enumhandles_pid",
+            "type": "promptString",
+            "description": "Target PID - Required when using h2p or p2h",
+            "default": "0"
+        }
+    ]
 }

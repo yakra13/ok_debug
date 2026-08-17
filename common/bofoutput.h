@@ -8,44 +8,35 @@
 
 #pragma comment(lib, "OleAut32.lib")
 
-extern "C" {
-    //DFR(KERNEL32, HeapAlloc);
-    //DFR(KERNEL32, HeapReAlloc);
-    //DFR(KERNEL32, HeapFree);
-    //DFR(KERNEL32, GetProcessHeap);
-    //DFR(MSVCRT, memcpy);
-    //DFR(MSVCRT, vsnprintf);
-    //
-    //DFR(OLEAUT32, SysStringLen);
+extern "C"
+{
+    #ifndef _DEBUG
+        WINBASEAPI LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes);
+        WINBASEAPI LPVOID WINAPI KERNEL32$HeapReAlloc(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem, SIZE_T dwBytes);
+        WINBASEAPI BOOL   WINAPI KERNEL32$HeapFree(HANDLE, DWORD, PVOID);
+        WINBASEAPI HANDLE WINAPI KERNEL32$GetProcessHeap();
 
-#ifndef _DEBUG
-    WINBASEAPI LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes);
-    WINBASEAPI LPVOID WINAPI KERNEL32$HeapReAlloc(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem, SIZE_T dwBytes);
-    WINBASEAPI BOOL   WINAPI KERNEL32$HeapFree(HANDLE, DWORD, PVOID);
-    WINBASEAPI HANDLE WINAPI KERNEL32$GetProcessHeap();
-
-    WINBASEAPI PVOID WINAPI MSVCRT$memcpy(void* dest, const void* src, size_t count);
-    WINBASEAPI INT   WINAPI MSVCRT$vsnprintf(char* buffer, size_t count, const char* format, va_list arg);
-    
-    WINBASEAPI UINT WINAPI OLEAUT32$SysStringLen(BSTR bstr);
-#endif
-
-
-#ifdef _DEBUG
-    #define KERNEL32$HeapAlloc      HeapAlloc
-    #define KERNEL32$HeapReAlloc    HeapReAlloc
-    #define KERNEL32$HeapFree       HeapFree
-    #define KERNEL32$GetProcessHeap GetProcessHeap
-
-    #define MSVCRT$memcpy           memcpy
-    #define MSVCRT$vsnprintf        vsnprintf
-
-    #define OLEAUT32$SysStringLen   SysStringLen
+        WINBASEAPI PVOID WINAPI MSVCRT$memcpy(void* dest, const void* src, size_t count);
+        WINBASEAPI INT   WINAPI MSVCRT$vsnprintf(char* buffer, size_t count, const char* format, va_list arg);
+        
+        WINBASEAPI UINT WINAPI OLEAUT32$SysStringLen(BSTR bstr);
     #endif
 
-    #ifndef BOF_OUTPUT_BUFFER_SIZE
-    #define BOF_OUTPUT_BUFFER_SIZE 8192
-#endif
+    #ifdef _DEBUG
+        #define KERNEL32$HeapAlloc      HeapAlloc
+        #define KERNEL32$HeapReAlloc    HeapReAlloc
+        #define KERNEL32$HeapFree       HeapFree
+        #define KERNEL32$GetProcessHeap GetProcessHeap
+
+        #define MSVCRT$memcpy           memcpy
+        #define MSVCRT$vsnprintf        vsnprintf
+
+        #define OLEAUT32$SysStringLen   SysStringLen
+        #endif
+
+        #ifndef BOF_OUTPUT_BUFFER_SIZE
+        #define BOF_OUTPUT_BUFFER_SIZE 8192
+    #endif
 
     typedef struct
     {
@@ -57,7 +48,7 @@ extern "C" {
 
     static inline BOOL BofBufferInit(BOF_Buffer* bofOut);
     static inline BOOL BofBufferAppend(BOF_Buffer* bofOut, const PCHAR data, SIZE_T length);
-    static inline BOOL BofPrintf(BOF_Buffer* bofOut, const PCHAR format, ...);
+    static inline BOOL BofPrintf(BOF_Buffer* bofOut, const CHAR* format, ...);
     static inline BOOL BofBufferFlush(BOF_Buffer* buffer);
     static inline VOID BofBufferFree(BOF_Buffer* buffer);
 
@@ -110,7 +101,7 @@ extern "C" {
         buffer->capacity = 0;
     }
 
-    static inline BOOL BofPrintf(BOF_Buffer* bofOut, const PCHAR format, ...)
+    static inline BOOL BofPrintf(BOF_Buffer* bofOut, const CHAR* format, ...)
     {
         BOOL bResult = FALSE;
         INT length;

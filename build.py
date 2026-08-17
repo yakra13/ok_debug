@@ -188,18 +188,28 @@ class BuildSystem:
     def _run_with_spinner(self, cmd: list[str], env: dict[str, str]) -> tuple[int, str, str]:
         spinner = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
 
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-        )
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+            )
 
-        while proc.poll() is None:
-            print(f"{next(spinner)}", end="", flush=True)
-            time.sleep(0.08)
-            print("\b", end="", flush=True)
+            # Hide cursor during load animation
+            sys.stdout.write("\033[?25l")
+            sys.stdout.flush()
+
+            while proc.poll() is None:
+                print(f"{next(spinner)}", end="", flush=True)
+                time.sleep(0.08)
+                print("\b", end="", flush=True)
+
+        finally:
+            # Show cursor when done or on error
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
 
         stdout, stderr = proc.communicate()
 
