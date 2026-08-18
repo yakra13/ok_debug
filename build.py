@@ -1,4 +1,5 @@
 import argparse
+from enum import Enum
 import itertools
 import json
 import os
@@ -7,10 +8,17 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Final, Literal, TypeAlias
+from typing import Final, Iterable, Literal, TypeAlias
 
 Arch: TypeAlias   = Literal['x64', 'x86']
 Config: TypeAlias = Literal['debug', 'release']
+
+class BuildResult(Enum):
+    FAIL = "FAIL"
+    SKIP = "SKIPPED"
+    SUCCESS = "SUCCESS"
+    UP_TO_DATE = "UP TO DATE"
+    
 
 S_CLEAN: Final[str]   = 'clean'
 S_DEBUG: Final[str]   = 'debug'
@@ -107,22 +115,42 @@ class BuildSystem:
 
         raise FileNotFoundError(f"'{proj_name}' not found in '{BOFS_DIR}'")
 
-    def _get_source_files(self, project: Path) -> list[Path]:
-        sources: list[Path] = []
+    def _get_built_files(self, proj_name: str, cfg: Config, arch: Arch) -> list[Path]:
+        files: list[Path] = []
+
+        build_path: Path = RELEASE_DIR if cfg == 'release' else DEBUG_DIR
+
+        build_path = build_path / arch
+
+        if not build_path.exists():
+            return []
+
+        for file in build_path.iterdir():
+            if not file.is_file():
+                continue
+
+            if file.stem.casefold() == proj_name.casefold():
+                files.append(file)
+
+        return files    
+        
+    def _get_source_file(self, project: Path, proj_name: str) -> Path:
+        # sources: list[Path] = []
         
         for file in project.iterdir():
             if not file.is_file():
                 continue
     
             if file.suffix.lower() in (".c", ".cpp"):
-                sources.append(file)
+                if file.stem.casefold() == proj_name.casefold():
+                    return file
     
-        if not sources:
-            raise FileNotFoundError(f"No C/C++ sources found in {project}")
+        raise FileNotFoundError(f"No C/C++ source found in {project}")
+        # if not sources:
     
-        return sources
+        # return sources
 
-    def _get_compile_cmd(self, sources: list[Path], out_dir: Path, cfg: Config) -> list[str]:
+    def _get_compile_cmd(self, src: list[Path], out_dir: Path, cfg: Config) -> list[str]:
         cmd: list[str] = CL_BASE_CMD.copy()
         cmd += [f"/I{str(x)}" for x in INCLUDES]
         cmd += [f"/Fo{out_dir}\\", f"/Fd{out_dir}\\"]
@@ -130,15 +158,15 @@ class BuildSystem:
         if cfg == S_DEBUG:
             cmd += CL_DEBUG_FLAGS
             # Append mock.cpp required for debug builds
-            sources.append(MOCK_PATH)
+            src.append(MOCK_PATH)
         else:
             cmd += CL_RELEASE_FLAGS
 
-        cmd += [str(x) for x in sources]
+        cmd += [str(x) for x in src]
 
         return cmd
 
-    def _get_link_cmd(self, file_name: str, obj_dir: Path, out_dir: Path, cfg: Config) -> list[str]:
+    def _get_link_cmd(self, file_name: str, obj_dir: Path, out_dir: Path) -> list[str]:
         obj_files: list[Path] = list(obj_dir.glob("*.obj"))
 
         full_path: Path = out_dir / file_name
@@ -150,10 +178,10 @@ class BuildSystem:
         if not obj_files:
             raise FileNotFoundError(f"No object files found in {obj_dir}")
 
-        if cfg == S_DEBUG:
-            cmd = ["link", "/DEBUG", f"/PDB:{pdb}", f"/OUT:{exe}"]
-        else:
-            cmd = ["link", "/lib", f"/out:{obj}",]
+        # if cfg == S_DEBUG:
+        cmd = ["link", "/DEBUG", f"/PDB:{pdb}", f"/OUT:{exe}"]
+        # else:
+        #     cmd = ["link", "/lib", f"/out:{obj}",]
 
         cmd += [str(x) for x in obj_files]
 
@@ -215,13 +243,14 @@ class BuildSystem:
 
         return proc.returncode, stdout, stderr
 
-    def build(self, proj_name: str, cfg: Config, arch: Arch) -> str | None:
+    def build(self, proj_name: str, cfg: Config, arch: Arch) -> tuple[BuildResult, str | None]:
         project: Path
         output_root: Path
         object_dir: Path
         debug_out: Path
 
-        sources: list[Path]    = []
+        # sources: list[Path]    = []
+        source: Path
         compile_cmd: list[str] = []
         link_cmd: list[str]    = []
 
@@ -230,17 +259,21 @@ class BuildSystem:
         try:
             project = self._get_project_path(proj_name)
         except FileNotFoundError as err:
-            return str(err)
+            return BuildResult.FAIL, str(err)
         
         try:
-            sources = self._get_source_files(project)
+            source = self._get_source_file(project, proj_name)
         except FileNotFoundError as err:
-            return str(err)
+            return BuildResult.FAIL, str(err)
 
-        try:
-            self._validate_entry_source(project, sources, cfg)
-        except FileNotFoundError as err:
-            return str(err)
+        # try:
+        #     self._validate_entry_source(project, source, cfg)
+        # except FileNotFoundError as err:
+        #     return BuildResult.FAIL, str(err)
+
+        # if debug build source must be .cpp
+        if cfg == S_DEBUG and source.suffix != '.cpp':
+            return BuildResult.FAIL, "Source must be cpp file for debug builds"
 
         #--------------------------------------
         #      Setup / create directories
@@ -250,9 +283,30 @@ class BuildSystem:
         debug_out   = BUILD_DIR / cfg / arch
         object_dir  = output_root / arch
 
-        output_root.mkdir(parents=True, exist_ok=True)
-        debug_out.mkdir(parents=True, exist_ok=True)
-        object_dir.mkdir(parents=True, exist_ok=True)
+        
+
+        # Check if built file(s) already exists
+        built_files = self._get_built_files(proj_name, cfg, arch)
+
+        if built_files:
+            has_exe: bool = True
+            has_pdb: bool = True
+
+            oldest_source: float = get_oldest_modified(project, [".c", ".cpp", ".h"])
+            oldest_built: float = min(file.stat().st_mtime for file in built_files)
+
+            if cfg == S_DEBUG:
+                has_exe = any(file.suffix.lower() == '.exe' for file in built_files)
+                has_pdb = any(file.suffix.lower() == '.pdb' for file in built_files)
+
+            # If the existing exe is newer than the source
+            # we can skip
+            if oldest_built > oldest_source:
+                # Even if the built is newer it must have both files
+                if has_exe and has_pdb:
+                    return BuildResult.UP_TO_DATE, None
+
+
 
         # Append this projects directory to the include directories
         INCLUDES.append(project)
@@ -260,10 +314,10 @@ class BuildSystem:
         #--------------------------------------
         #           Build the project
         #--------------------------------------
+        
+        object_dir.mkdir(parents=True, exist_ok=True)
 
-        compile_cmd = self._get_compile_cmd(sources, object_dir, cfg)
-
-        # print(f"  {project.name:<30}", end='', flush=True)
+        compile_cmd = self._get_compile_cmd([source], object_dir, cfg)
 
         ret, stdout, stderr = self._run_with_spinner(
             POWERSHELL_CMD + [' '.join(compile_cmd)],
@@ -271,29 +325,37 @@ class BuildSystem:
         )
 
         if ret != 0:
-            return stderr or stdout
+            return BuildResult.FAIL, stderr or stdout
 
         #--------------------------------------
-        #           Link the project
+        #     Link the project (Debug only)
         #--------------------------------------
+        output_root.mkdir(parents=True, exist_ok=True)
+        debug_out.mkdir(parents=True, exist_ok=True)
 
-        try:
-            link_cmd = self._get_link_cmd(
-                proj_name.casefold(),
-                object_dir,
-                debug_out,
-                cfg
+        if cfg == S_DEBUG:
+            try:
+                link_cmd = self._get_link_cmd(
+                    proj_name.casefold(),
+                    object_dir,
+                    debug_out
+                )
+            except FileNotFoundError as err:
+                return BuildResult.FAIL, str(err)
+            
+            ret, stdout, stderr = self._run_with_spinner(
+                POWERSHELL_CMD +  [' '.join(link_cmd)],
+                self._env[arch]
             )
-        except FileNotFoundError as err:
-            return str(err)
-        
-        ret, stdout, stderr = self._run_with_spinner(
-            POWERSHELL_CMD +  [' '.join(link_cmd)],
-            self._env[arch]
-        )
 
-        if ret != 0:
-            return stderr or stdout
+            if ret != 0:
+                return BuildResult.FAIL, stderr or stdout
+        else:
+            # we need to move the obj if its not linked since that handles placing the file
+            for file in object_dir.iterdir():
+                if file.is_file():
+                    name = file.with_suffix(".o").name if file.suffix.lower() == ".obj" else file.name
+                    shutil.move(file, RELEASE_DIR / arch / name)
 
         #--------------------------------------
         #         Cleanup build files
@@ -302,7 +364,21 @@ class BuildSystem:
         if output_root.exists():
             shutil.rmtree(output_root)
 
-        return None
+        return BuildResult.SUCCESS, None
+
+def get_oldest_modified(dir: Path, extensions: Iterable[str]) -> float:
+    extensions = {ext.lower().lstrip(".") for ext in extensions}
+
+    files = (
+        file
+        for file in dir.rglob("*")
+        if file.is_file() and file.suffix.lower().lstrip(".") in extensions
+    )
+
+    return min(
+        (file.stat().st_mtime for file in files),
+        default=0.0
+    )
 
 def clean() -> None:
     if not BUILD_DIR.is_dir():
@@ -320,6 +396,8 @@ def clean() -> None:
             path.unlink()
 
 def build_projects(projects: list[str], arch: Arch, config: Config) -> dict[str, str]:
+    result: BuildResult
+    output: str | None
     errors: dict[str, str] = {}
 
     # Normalize names
@@ -339,11 +417,15 @@ def build_projects(projects: list[str], arch: Arch, config: Config) -> dict[str,
         # build returns a string on failure; None on success
         print(f"  {project.name:<30}", end='', flush=True)
 
-        if res := builder.build(project.name, config, arch):
-            errors[project.name] = res
-            print(C_RED + "FAIL" + C_RESET)
+        result, output = builder.build(project.name, config, arch)
+
+        if result == BuildResult.FAIL:
+            errors[project.name] = output or "No output received"
+            print(C_RED + result.name + C_RESET)
+        elif result == BuildResult.SUCCESS:
+            print(C_GREEN + result.value + C_RESET)
         else:
-            print(C_GREEN + "SUCCESS" + C_RESET)
+            print(C_YELLOW + result.value + C_RESET)
 
     return errors
 

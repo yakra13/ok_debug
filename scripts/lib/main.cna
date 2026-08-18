@@ -110,8 +110,8 @@ sub generate_file_name
 
     ($bid, $path, $name) = (@_);
 
-    %info = beacon_info($bid);
-    $source = $bid;
+    %info      = beacon_info($bid);
+    $source    = $bid;
     $timestamp = formatDate("yyyyMMddHHmm");
 
     if (%info["computer"] ne "")
@@ -149,14 +149,14 @@ sub handle_output
     $append   = (%cmd["flags"] & $CMD_APPEND_FILE);
 
     # Handle non-output callbacks immediately.
-    if (%info["type"] eq "error")
+    if (%info["type_id"] == 0x0d) # eq "error")
     {
         berror($bid, $output);
         return;
     }
 
     # Ignore callback types we don't explicitly handle.
-    if ((!$redirect) || (%info["type"] ne "output"))
+    if ((!$redirect) || (%info["type_id"] ne 0x00)) # "output"))
     {
         blog($bid, "\n" . $output);
         return;

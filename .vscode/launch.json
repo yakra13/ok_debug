@@ -32,10 +32,10 @@
         //     "symbolSearchPath": "${workspaceFolder}"
         // },
         {
-            "name": "Dbg EnumHandles x64",
+            "name": "64 EnumHandles",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/debug/${input:arch}/enumhandles.exe",
+            "program": "${workspaceFolder}/build/debug/x64/enumhandles.exe",
             "args":[
                 "${input:enumhandles_search}",
                 "${input:enumhandles_query}",
@@ -44,18 +44,27 @@
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
-            "symbolSearchPath": "${workspaceFolder}"
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All x64 - Debug"
+        },
+        {
+            "name": "86 EnumHandles",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/x86/enumhandles.exe",
+            "args":[
+                "${input:enumhandles_search}",
+                "${input:enumhandles_query}",
+                "${input:enumhandles_pid}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All x86 - Debug"
         },
     ],
     "inputs": [
-        {
-            "id": "arch",
-            "type": "pickString",
-            "description": "Architecture",
-            "options": ["x64", "x86"],
-            "default": "x64"
-        },
-
         //------------------------------------------------------------------------------
         // EnumHandles Args
         //------------------------------------------------------------------------------

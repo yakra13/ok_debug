@@ -41,15 +41,15 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 	switch (flags)
 	{
 	case QUERY_PROC:
-		swprintf_s(Filter, 50, L"%s", L"Process");
+		MSVCRT$swprintf_s(Filter, 50, L"%s", L"Process");
 		break;
 	default:
-		swprintf_s(Filter, 50, L"%s", L"Thread");
+		MSVCRT$swprintf_s(Filter, 50, L"%s", L"Thread");
 		break;
 	}
 
 	// TODO: heap alloc? heap free 
-	handleInfo = (PSYSTEM_HANDLE_INFORMATION_EX)malloc(handleInfoSize);
+	handleInfo = (PSYSTEM_HANDLE_INFORMATION_EX)MSVCRT$malloc(handleInfoSize);
 
 	if (!handleInfo)
 	{
@@ -58,7 +58,7 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 	}
 
 	while (status = (
-		NtQuerySystemInformation(
+		NTDLL$NtQuerySystemInformation(
 			(SYSTEM_INFORMATION_CLASS)SystemExtendedHandleInformation,
 			handleInfo,
 			handleInfoSize,
@@ -67,7 +67,7 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 		)
 	{
 		handleInfoSize *= 2;
-		tmp = realloc(handleInfo, handleInfoSize);
+		tmp = MSVCRT$realloc(handleInfo, handleInfoSize);
 
 		if (!tmp)
 		{
@@ -121,12 +121,12 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 		//
 		// Skip handles owned by ourselves
 		//
-		if (objHandle->UniqueProcessId == (ULONG_PTR)GetCurrentProcessId())
+		if (objHandle->UniqueProcessId == (ULONG_PTR)KERNEL32$GetCurrentProcessId())
 		{
 			continue;
 		}
 
-		processHandle = OpenProcess(
+		processHandle = KERNEL32$OpenProcess(
 			PROCESS_DUP_HANDLE | PROCESS_QUERY_INFORMATION,
 			FALSE,
 			(DWORD)objHandle->UniqueProcessId
@@ -137,10 +137,10 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 			goto iter_cleanup;
 		}
 
-		status = NtDuplicateObject(
+		status = NTDLL$NtDuplicateObject(
 			processHandle,
 			(HANDLE)objHandle->HandleValue,
-			GetCurrentProcess(),
+			KERNEL32$GetCurrentProcess(),
 			&dupHandle,
 			0,
 			0,
@@ -160,14 +160,14 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 			goto iter_cleanup;
 		}
 
-		objectTypeInfo = (POBJECT_TYPE_INFORMATION)malloc(0x1000);
+		objectTypeInfo = (POBJECT_TYPE_INFORMATION)MSVCRT$malloc(0x1000);
 
 		if (!objectTypeInfo)
 		{
 			goto iter_cleanup;
 		}
 
-		status = NtQueryObject(
+		status = NTDLL$NtQueryObject(
 			dupHandle,
 			ObjectTypeInformation,
 			objectTypeInfo,
@@ -180,12 +180,12 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 			goto iter_cleanup;
 		}
 
-		if (!StrStrIW(Filter, objectTypeInfo->Name.Buffer))
+		if (!SHLWAPI$StrStrIW(Filter, objectTypeInfo->Name.Buffer))
 		{
 			goto iter_cleanup;
 		}
 
-		status = NtQueryObject(
+		status = NTDLL$NtQueryObject(
 			dupHandle,
 			(OBJECT_INFORMATION_CLASS)ObjectNameInformation,
 			NULL,
@@ -198,14 +198,14 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 			goto iter_cleanup;
 		}
 
-		objectNameInfo = (POBJECT_NAME_INFORMATION)malloc(returnLength);
+		objectNameInfo = (POBJECT_NAME_INFORMATION)MSVCRT$malloc(returnLength);
 
 		if (!objectNameInfo)
 		{
 			goto iter_cleanup;
 		}
 
-		status = NtQueryObject(
+		status = NTDLL$NtQueryObject(
 			dupHandle,
 			(OBJECT_INFORMATION_CLASS)ObjectNameInformation,
 			objectNameInfo,
@@ -225,18 +225,18 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 		if (flags == QUERY_PROC)
 		{
-			procID = (ULONG_PTR)GetProcessId(dupHandle);
+			procID = (ULONG_PTR)KERNEL32$GetProcessId(dupHandle);
 		}
 		else if (flags == QUERY_THREAD)
 		{
-			procID = (ULONG_PTR)GetProcessIdOfThread(dupHandle);
+			procID = (ULONG_PTR)KERNEL32$GetProcessIdOfThread(dupHandle);
 		}
 
 		if (procID != 0)
 		{
 			if (flags == QUERY_THREAD)
 			{
-				HANDLE pH = OpenProcess(
+				HANDLE pH = KERNEL32$OpenProcess(
 					PROCESS_QUERY_INFORMATION,
 					FALSE,
 					(DWORD)procID
@@ -244,24 +244,24 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 				if (pH)
 				{
-					if (!K32GetProcessImageFileNameA(pH, procNameTemp, MAX_PATH))
+					if (!KERNEL32$K32GetProcessImageFileNameA(pH, procNameTemp, MAX_PATH))
 					{
-						sprintf_s(procNameTemp, MAX_PATH, "%s", "unknown");
+						MSVCRT$sprintf_s(procNameTemp, MAX_PATH, "%s", "unknown");
 					}
 
-					CloseHandle(pH);
+					KERNEL32$CloseHandle(pH);
 				}
 				else
 				{
-					sprintf_s(procNameTemp, MAX_PATH, "%s", "non existent?");
+					MSVCRT$sprintf_s(procNameTemp, MAX_PATH, "%s", "non existent?");
 				}
 			}
 			else
 			{
 				// KERNEL32$K32GetProcessImageFileNameA(dupHandle, procNameTemp, MAX_PATH);
-				if (!(K32GetProcessImageFileNameA(dupHandle, procNameTemp, MAX_PATH)))
+				if (!(KERNEL32$K32GetProcessImageFileNameA(dupHandle, procNameTemp, MAX_PATH)))
 				{
-					sprintf_s(procNameTemp, MAX_PATH, "%s", "unknown");
+					MSVCRT$sprintf_s(procNameTemp, MAX_PATH, "%s", "unknown");
 				}
 			}
 		}
@@ -273,9 +273,9 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 		if (procID != 0 && objHandle->UniqueProcessId != procID)
 		{
-			if (!(K32GetProcessImageFileNameA(processHandle, procHostName, MAX_PATH)))
+			if (!(KERNEL32$K32GetProcessImageFileNameA(processHandle, procHostName, MAX_PATH)))
 			{
-				sprintf_s(procHostName, MAX_PATH, "%s", "unknown");
+				MSVCRT$sprintf_s(procHostName, MAX_PATH, "%s", "unknown");
 			}
 			
 			BofPrintf(
@@ -296,22 +296,22 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 
 		if (objectNameInfo)
 		{
-			free(objectNameInfo);
+			MSVCRT$free(objectNameInfo);
 		}
 
 		if (objectTypeInfo)
 		{
-			free(objectTypeInfo);
+			MSVCRT$free(objectTypeInfo);
 		}
 
 		if (dupHandle && dupHandle != INVALID_HANDLE_VALUE)
 		{
-			CloseHandle(dupHandle);
+			KERNEL32$CloseHandle(dupHandle);
 		}
 
 		if (processHandle && processHandle != INVALID_HANDLE_VALUE)
 		{
-			CloseHandle(processHandle);
+			KERNEL32$CloseHandle(processHandle);
 		}
 	}
 
@@ -319,7 +319,7 @@ cleanup:
 
 	if (handleInfo)
 	{
-		free(handleInfo);
+		MSVCRT$free(handleInfo);
 	}
 
 	return foundHandles;
@@ -349,7 +349,7 @@ void go(char* args, int len)
 	search = BeaconDataExtract(&parser, NULL);
 	query = BeaconDataExtract(&parser, NULL);
 
-	if (GetComputerNameA(computerName, &nameSize))
+	if (KERNEL32$GetComputerNameA(computerName, &nameSize))
     {
         BofPrintf(&outputBuffer, "%s:\n", computerName);
     }
@@ -359,12 +359,12 @@ void go(char* args, int len)
     }
 
 
-	if (strcmp(query, "proc") == 0)
+	if (MSVCRT$strcmp(query, "proc") == 0)
 	{
 		flags = QUERY_PROC;
 		BofPrintf(&outputBuffer, "  process_handles:\n");
 	}
-	else if (strcmp(query, "thread") == 0)
+	else if (MSVCRT$strcmp(query, "thread") == 0)
 	{
 		flags = QUERY_THREAD;
 		BofPrintf(&outputBuffer, "  thread_handles:\n");
@@ -375,13 +375,13 @@ void go(char* args, int len)
 		goto cleanup;
 	}
 
-	if (strcmp(search, "all") == 0)
+	if (MSVCRT$strcmp(search, "all") == 0)
 	{
 		BeaconPrintf(CALLBACK_OUTPUT_UTF8, "[*] Start enumerating all processes with handles to all other processes\n");
 		
 		result = GetHandlesEx(0, flags, 0);
 	}
-	else if (strcmp(search, "h2p") == 0)
+	else if (MSVCRT$strcmp(search, "h2p") == 0)
 	{
 		targetPid = BeaconDataInt(&parser);
 
@@ -389,7 +389,7 @@ void go(char* args, int len)
 		
 		result = GetHandlesEx(0, flags, targetPid);
 	}
-	else if (strcmp(search, "p2h") == 0)
+	else if (MSVCRT$strcmp(search, "p2h") == 0)
 	{
 		basePid = BeaconDataInt(&parser);
 		
