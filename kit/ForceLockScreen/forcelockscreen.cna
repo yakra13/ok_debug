@@ -1,0 +1,30 @@
+# author REDMED-X
+
+beacon_command_register(
+	"forcelockscreen",
+    "Force the lock screen of the current user session.",
+	"INFO:\n" .
+    "  Force the lock screen of the current user session.\n\n" .
+	"USAGE:\n" .
+    "  forcelockscreen\n\n",
+    "operatorskit"
+);
+	
+alias forcelockscreen {
+    $bid = $1;
+
+    # Read in the right BOF file
+    $handle = openf(script_resource("forcelockscreen.o"));
+    $data   = readb($handle, -1);
+    closef($handle);
+
+
+	$arg_data  = bof_pack($bid);
+
+	blog($bid, "Tasked to lock the current user's screen..");
+    beacon_inline_execute($bid, $data, "go", $arg_data);
+
+}
+
+
+

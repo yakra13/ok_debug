@@ -1,0 +1,39 @@
+beacon_command_register(
+	"systeminfo",
+    "\c0Enumerate system information with WMI.\o",
+	"\c7Enumerate system information via WMI.\o\n\n" .
+	"USAGE:\nsysteminfo\n",
+    "operatorskit"
+);
+	
+alias systeminfo 
+{
+    local('$bid %cmd $arg_data');
+    local('$bof_path $output_name');
+
+    ($bid) = @_;
+
+    $bof_path = "systeminfo.o";
+	$output_name = "system_info";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+	# $arg_data  = bof_pack($bid);
+
+	blog($bid, "Tasked to connect to ROOT\\CIMV2 to fetch system information..");
+
+    handle_output_beacon_inline_execute(
+        $bid,
+        $bof_path,
+        "go",
+        %cmd
+    );
+}

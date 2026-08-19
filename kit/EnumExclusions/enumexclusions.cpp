@@ -19,7 +19,7 @@ int EnumerateDefenderExclusions()
 {
     HRESULT hr;
 
-	int result = 0;
+	int result = TRUE;
 
 	IWbemLocator* pLoc = NULL;
 	IWbemServices* pSvc = NULL;
@@ -29,6 +29,10 @@ int EnumerateDefenderExclusions()
 
 	IID CLSIDWbemLocator = {0x4590f811, 0x1d3a, 0x11d0, {0x89, 0x1f, 0x00, 0xaa, 0x00, 0x4b, 0x2e, 0x24}};
 	IID IIDIWbemLocator = {0xdc12a687, 0x737f, 0x11cf, {0x88, 0x4d, 0x00, 0xaa, 0x00, 0x4b, 0x2e, 0x24}};
+
+	std::vector<std::wstring> paths;
+	std::vector<std::wstring> extensions;
+	std::vector<std::wstring> processes;
     
     hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED);
     if (FAILED(hr)) goto cleanup;
@@ -67,7 +71,6 @@ int EnumerateDefenderExclusions()
 		EOAC_NONE
 	);
 
-    
 	hr = pSvc->ExecQuery(
 		SysAllocString(L"WQL"),
 		SysAllocString(L"SELECT * FROM MSFT_MpPreference"),
@@ -78,10 +81,9 @@ int EnumerateDefenderExclusions()
 	
 	if (FAILED(hr)) goto cleanup;
 
-	BofPrintf(
-		&buffer,
-		"\nExclusion enumeration results:\n====================================================\n"
-	);
+
+
+
 
 	while (pEnumerator)
 	{
@@ -100,37 +102,55 @@ int EnumerateDefenderExclusions()
 
 		if (SUCCEEDED(hr))
 		{
-			if (pathName.vt == VT_NULL)
+			if (pathName.vt == VT_NULL || pathName.vt == VT_EMPTY)
 			{
-				BofPrintf(&buffer, "[-] No file or folder exclusion configured\n");
-				result = 1; 
+				// BeaconPrintf(
+				// 	CALLBACK_OUTPUT_UTF8,
+				// 	"No file or folder exclusion configured\n"
+				// );
+				// result = 1; 
 			}
 			else if (pathName.vt == (VT_ARRAY | VT_BSTR))
 			{
 				SAFEARRAY* sa = pathName.parray;
-				BSTR* bstrArray;
-				long lBound, uBound;
+				
+				BSTR* bstrArray = nullptr;
 
+				LONG lBound = 0;
+				LONG uBound = -1;
+				
 				SafeArrayGetLBound(sa, 1, &lBound);
 				SafeArrayGetUBound(sa, 1, &uBound);
-				SafeArrayAccessData(sa, (void**)&bstrArray);
-
-				for (long i = lBound; i <= uBound; i++)
+				SafeArrayAccessData(sa, reinterpret_cast<void**>(&bstrArray));
+				
+				for (LONG i = lBound; i <= uBound; i++)
 				{
+					BSTR bstr = bstrArray[i - lBound];
+
+					if (bstr == nullptr) continue;
+
 					if (wcscmp(bstrArray[i], L"N/A: Must be an administrator to view exclusions") == 0)
 					{
+						SafeArrayUnaccessData(sa);
+
 						BeaconPrintf(
 							CALLBACK_ERROR,
 							"Access Denied! "
 							"The current user does not have sufficient permissions to enumerate exclusions.\n"
 						);
+
+						result = FALSE;
 						goto cleanup;
 					}
-					else
-					{
-						BofPrintf(&buffer, "[+] Found folder/file exclusion: %ls\n", bstrArray[i]);
-						result = 1; 
-					}
+					// else
+					// {
+					// 	// std::vector<std::wstring> paths;
+					// 	BofPrintf(&buffer, "  - %ls\n", bstrArray[i]);
+					// 	result = 1; 
+					// }
+
+					paths.emplace_back(bstr);
+					// result = 1;
 				}
 
 				SafeArrayUnaccessData(sa);
@@ -154,25 +174,33 @@ int EnumerateDefenderExclusions()
 		
 		if (SUCCEEDED(hr))
 		{
-			if (extName.vt == VT_NULL)
+			if (extName.vt == VT_NULL || extName.vt == VT_EMPTY)
 			{
-				BofPrintf(&buffer, "[-] No extention exclusion configured\n");
-				result = 1; 
+				// BofPrintf(&buffer, "[-] No extention exclusion configured\n");
+				// result = 1; 
 			}
 			else if (extName.vt == (VT_ARRAY | VT_BSTR))
 			{
 				SAFEARRAY* sa = extName.parray;
-				BSTR* bstrArray;
-				long lBound, uBound;
+
+				BSTR* bstrArray = nullptr;
+
+				LONG lBound = 0;
+				LONG uBound = -1;
 
 				SafeArrayGetLBound(sa, 1, &lBound);
 				SafeArrayGetUBound(sa, 1, &uBound);
-				SafeArrayAccessData(sa, (void**)&bstrArray);
+				SafeArrayAccessData(sa, reinterpret_cast<void**>(&bstrArray));
 
 				for (long i = lBound; i <= uBound; i++)
 				{
-					BofPrintf(&buffer, "[+] Found extention exclusion: %ls\n", bstrArray[i]);
-					result = 1; 
+					BSTR bstr = bstrArray[i - lBound];
+
+					if (bstr == nullptr) continue;
+
+					// BofPrintf(&buffer, "[+] Found extention exclusion: %ls\n", bstrArray[i]);
+					extensions.emplace_back(bstr);
+					// result = 1; 
 				}
 
 				SafeArrayUnaccessData(sa);
@@ -191,25 +219,31 @@ int EnumerateDefenderExclusions()
 
 		if (SUCCEEDED(hr))
 		{
-			if (procName.vt == VT_NULL)
+			if (procName.vt == VT_NULL || procName.vt == VT_EMPTY)
 			{
-				BofPrintf(&buffer, "[-] No process exclusion configured\n");
-				result = 1; 
+				// BofPrintf(&buffer, "[-] No process exclusion configured\n");
+				// result = 1; 
 			}
 			else if (procName.vt == (VT_ARRAY | VT_BSTR))
 			{
 				SAFEARRAY* sa = procName.parray;
-				BSTR* bstrArray;
-				long lBound, uBound;
+
+				BSTR* bstrArray = nullptr;
+
+				LONG lBound = 0;
+				LONG uBound = -1;
 
 				SafeArrayGetLBound(sa, 1, &lBound);
 				SafeArrayGetUBound(sa, 1, &uBound);
-				SafeArrayAccessData(sa, (void**)&bstrArray);
+				SafeArrayAccessData(sa, reinterpret_cast<void**>(&bstrArray));
 
 				for (long i = lBound; i <= uBound; i++)
 				{
-					BofPrintf(&buffer, "[+] Found process exclusion: %ls\n", bstrArray[i]);
-					result = 1; 
+					BSTR bstr = bstrArray[i - lBound];
+
+					processes.emplace_back(bstr);
+					// BofPrintf(&buffer, "[+] Found process exclusion: %ls\n", bstrArray[i]);
+					// result = 1; 
 				}
 
 				SafeArrayUnaccessData(sa);
@@ -230,6 +264,33 @@ cleanup:
 	if (pResult) pResult->Release();
     
 	CoUninitialize();
+
+	//
+	// Write data to buffer
+	//
+
+	BofPrintf(&buffer, "defender_exclusions:\n");
+
+	BofPrintf(&buffer, "  paths:\n");
+
+	for (const auto& path : paths)
+	{
+		BofPrintf(&buffer, "    - %ls\n", path.c_str());
+	}
+
+	BofPrintf(&buffer, "  extensions:\n");
+
+	for (const auto& ext : extensions)
+	{
+		BofPrintf(&buffer, "    - %ls\n", ext.c_str());
+	}
+
+	BofPrintf(&buffer, "  processes:\n");
+
+	for (const auto& process : processes)
+	{
+		BofPrintf(&buffer, "    - %ls\n", process.c_str());
+	}
 
 	return result;
 }

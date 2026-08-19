@@ -17,6 +17,19 @@ extern "C"{
 
 BOF_Buffer buffer = {0};
 
+int digit_count(int n)
+{
+    int count = 1;
+
+    while (n >= 10)
+    {
+        n /= 10;
+        count++;
+    }
+
+    return count;
+}
+
 bool keywordMatches(const char* content, const char* keyword)
 {
     size_t keywordLen = strlen(keyword);
@@ -116,8 +129,20 @@ bool SearchFileForKeyword(const char* filePath, const char* keyword)
 	bool firstPrint = true;
 	char preview[MAX_PREVIEW_LENGTH + 1]; 
 
+   
+    int line_count = 0;
+
+    typedef struct {
+        int line_number;
+        std::string content;
+    } Line;
+
+    std::vector<Line> lines;
+
 	while (line)
     {
+        line_count++;
+
 		if (keywordMatches(line, lowerKeyword))
         {
 			found = true;
@@ -135,18 +160,35 @@ bool SearchFileForKeyword(const char* filePath, const char* keyword)
 			
             if (firstPrint)
             {
-                BofPrintf(&buffer, "\n[+] Keyword '%s' found in file: %s\n", keyword, filePath);
+                // BofPrintf(&buffer, "\n[+] Keyword '%s' found in file: %s\n", keyword, filePath);
+                BofPrintf(&buffer, "    - path: %s\n", filePath);
+                BofPrintf(&buffer, "      lines:\n");
 				firstPrint = false;
 			}
 
-            BofPrintf(&buffer, "\t- Matched on pattern: %s\n", preview);
+            // BofPrintf(&buffer, "\t- Matched on pattern: %s\n", preview);
+            // BofPrintf(&buffer, "        - %s\n", preview);
+            lines.emplace_back(Line(line_count, preview));
 		}
 
 		line = strtok(NULL, "\n");
 	}
 
+
+
     free(fileContents);
     free(lowerKeyword);
+
+    //
+    // Write to output
+    //
+
+    int digits = digit_count(line_count);
+
+    for (const auto& line : lines)
+    {
+        BofPrintf(&buffer, "        %0*d: %s\n", digits, line.line_number, line.content.c_str());
+    }
 	
     return found;
 }
@@ -180,7 +222,8 @@ void SearchFilesRecursive(const char* lpFolder, const char* lpSearchPattern, con
 				}
                 else if (!*keyword)
                 {
-                    BofPrintf(&buffer, "[+] File found: %s\n", fullPath);
+                    // BofPrintf(&buffer, "[+] File found: %s\n", fullPath);
+                    BofPrintf(&buffer, "    - path: %s\n", fullPath);
 				}
 			}
 		} while (FindNextFileA(hFind, &findFileData) != 0);
@@ -242,11 +285,18 @@ void go(char *args, int len)
     }
 
 	BeaconDataParse(&parser, args, len);
+
 	lpDirectory     = BeaconDataExtract(&parser, NULL);
 	lpSearchPattern = BeaconDataExtract(&parser, NULL);
 	keyword         = BeaconDataExtract(&parser, NULL);
 
-    BofPrintf(&buffer, "====================FILE SEARCH RESULTS====================\n");
+    // BofPrintf(&buffer, "====================FILE SEARCH RESULTS====================\n");
+
+    BofPrintf(&buffer, "file_search:\n");
+    BofPrintf(&buffer, "  directory: %s\n", lpDirectory);
+    if (keyword)
+        BofPrintf(&buffer, "  keyword: %s\n", keyword);
+    BofPrintf(&buffer, "  results:\n");
 	
     SearchFilesRecursive(lpDirectory, lpSearchPattern, keyword);
 
@@ -261,19 +311,26 @@ cleanup:
 
 int main(int argc, char* argv[])
 {
-    int reqArgCount = 4;
+    int reqArgCount = 3;
 
     // directory
     // pattern
     // keyword
 
-    if (argc != reqArgCount)
+    if (argc < reqArgCount)
     {
-        printf("Usage ... need the args");
+        printf("Usage ... need the args %d", argc);
 		return 1;
     }
 
-    bof::runMocked<char*&, char*&, char*&>(go, argv[1], argv[2], argv[3]);
+    const char* keyword = NULL;
+
+    if (argc == 4)
+        keyword = argv[3];
+    else
+        keyword = "";
+
+    bof::runMocked<char*&, char*&, const char*&>(go, argv[1], argv[2], keyword);
 
     return 0;
 }

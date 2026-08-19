@@ -1,0 +1,57 @@
+# author REDMED-X
+
+beacon_command_register(
+    "psremotewmi",
+    "\c0List all running processes on a remote host.\o",
+    "\c8Get a list of all processes running on the remote host using WMI methods.\o\n\n" .
+
+    $SUPPORTS_FILE_OUT_MESSAGE .
+
+    "USAGE:\n" . 
+    "  psremotewmi <FQDN or IP remote host>\n",
+    "operatorskit"
+);
+
+alias psremotewmi
+{
+    local('$bid %cmd $arg_data $remote_host');
+    local('$bof_path $pack_fmt $output_name');
+
+    ($bid) = @_;
+
+    $bof_path = "psremotewmi.o";
+    $pack_fmt = "z";
+    $output_name = "psremote_wmi";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $remote_host = %cmd["args"][0];;
+
+    if ($remote_host eq "")
+    {
+        berror($bid, "Remote host not specified.");
+        return;
+    }
+
+    # pack our arguments
+    $arg_data = bof_pack($bid, $pack_fmt, $remote_host);
+
+    blog($bid, "Tasked to list running processes on remote target: " . $remote_host);
+
+    handle_output_beacon_inline_execute(
+        $bid,
+        $bof_path,
+        "go",
+        %cmd,
+        $arg_data
+    );
+}
+

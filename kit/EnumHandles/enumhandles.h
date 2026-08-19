@@ -2,7 +2,6 @@
 #include "base/helpers.h"
 
 #include <Windows.h>
-//#include <winternl.h>
 #include <stdio.h>
 
 //#ifdef _DEBUG

@@ -21,10 +21,31 @@ beacon_command_register(
 
 alias enumfiles
 {
-    $bid = $1;
-	$lpDirectory = $2;
-    $lpSearchPattern = $3;
-    $keyword = $4;
+    local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$lpDirectory $lpSearchPattern $keyword');
+
+    ($bid) = @_;
+
+    $bof_path    = "enumfiles.o";
+	$output_name = "enum_files";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+	$lpDirectory     = %cmd["args"][0];
+    $lpSearchPattern = %cmd["args"][1];
+    $keyword         = %cmd["args"][2];
+
+    #
+    # Validation
+    #
 
     if ($lpDirectory eq "")
     {
@@ -38,14 +59,10 @@ alias enumfiles
         return;
     }
 
-    # Read in the right BOF file
-    $handle = openf(script_resource("enumfiles.o"));
-    $data   = readb($handle, -1);
-    closef($handle);
-
     # Pack our arguments
     $arg_data  = bof_pack($bid, "zzz", $lpDirectory, $lpSearchPattern, $keyword);
 
     blog($bid, "Tasked to search for matching files..");
-    beacon_inline_execute($bid, $data, "go", $arg_data);
+
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }

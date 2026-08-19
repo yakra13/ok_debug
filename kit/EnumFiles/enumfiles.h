@@ -5,7 +5,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include <stdbool.h>
-
+//
 extern "C" {
 #ifndef _DEBUG
     WINBASEAPI int    __cdecl MSVCRT$fclose(FILE *_File);

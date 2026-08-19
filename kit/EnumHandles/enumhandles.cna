@@ -25,6 +25,7 @@ beacon_command_register(
 alias enumhandles
 {
     local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$search $query $pid');
 
     ($bid) = @_;
 

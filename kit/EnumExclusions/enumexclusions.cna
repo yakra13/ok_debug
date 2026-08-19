@@ -8,17 +8,29 @@ beacon_command_register(
     "operatorskit"
 );
 	
-alias enumexclusions {
-    $bid = $1;
-	
-    # Read in the right BOF file
-    $handle = openf(script_resource("enumexclusions.o"));
-    $data   = readb($handle, -1);
-    closef($handle);
+alias enumexclusions
+{
+    local('$bid %cmd $arg_data $bof_path $output_name');
+
+    ($bid) = @_;
+
+    $bof_path    = "enumexclusions.o";
+	$output_name = "enum_exclusions";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
 
     # Pack our arguments
     $arg_data  = bof_pack($bid);
 
     blog($bid, "Tasked to enumerate exclusions..");
-    beacon_inline_execute($bid, $data, "go", $arg_data);
+    
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }

@@ -1,0 +1,54 @@
+beacon_command_register(
+	"enumtaskscheduler",
+    "\c0Enumerate and list all the scheduled tasks in the root folder.\o",
+    "\c8Enumerate and list all the scheduled tasks in the root folder.\n\n\o" .
+    
+    $SUPPORTS_FILE_OUT_MESSAGE .
+
+	"ARGUMENTS:\n" .
+    "  [hostName]: The FQDN of the remote host or \"\" for the current system.\n\n" .
+
+	"USAGE:\n" .
+    "  enumtaskscheduler <(optional) hostName>\n\n" .
+
+	"EXAMPLES:\n" .
+    "  enumtaskscheduler\n" .
+    "  enumtaskscheduler DB01.example.local\n",
+    "operatorskit"
+);
+
+alias enumtaskscheduler
+{
+    local('$bid %cmd $arg_data $host_name');
+    local('$bof_path $pack_fmt $output_name');
+
+    ($bid) = @_;
+
+    $bof_path = "enumtaskscheduler.o";
+    $pack_fmt = "Z";
+	$output_name = "schedtasks";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $host_name = %cmd["args"][0];
+
+    $arg_data = bof_pack($bid, $pack_fmt, $host_name);
+
+    blog($bid, "Tasked to enumerate scheduled tasks in the root folder of host: " . $host_name);
+
+    handle_output_beacon_inline_execute(
+        $bid,
+        $bof_path,
+        "go",
+        %cmd,
+        $arg_data
+    );
+}
