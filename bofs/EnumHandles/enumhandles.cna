@@ -28,7 +28,7 @@ alias enumhandles
 
     ($bid) = @_;
 
-    $bof_path = "enumhandles.o";
+    $bof_path    = "enumhandles.o";
 	$output_name = "enum_handles";
 
     %cmd = parse_command(@_);

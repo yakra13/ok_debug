@@ -20,21 +20,19 @@ extern "C"
         WINBASEAPI INT   WINAPI MSVCRT$vsnprintf(char* buffer, size_t count, const char* format, va_list arg);
         
         WINBASEAPI UINT WINAPI OLEAUT32$SysStringLen(BSTR bstr);
+
+        #define HeapAlloc      KERNEL32$HeapAlloc      
+        #define HeapReAlloc    KERNEL32$HeapReAlloc    
+        #define HeapFree       KERNEL32$HeapFree       
+        #define GetProcessHeap KERNEL32$GetProcessHeap 
+
+        #define memcpy         MSVCRT$memcpy           
+        #define vsnprintf      MSVCRT$vsnprintf        
+
+        #define SysStringLen   OLEAUT32$SysStringLen
     #endif
 
-    #ifdef _DEBUG
-        #define KERNEL32$HeapAlloc      HeapAlloc
-        #define KERNEL32$HeapReAlloc    HeapReAlloc
-        #define KERNEL32$HeapFree       HeapFree
-        #define KERNEL32$GetProcessHeap GetProcessHeap
-
-        #define MSVCRT$memcpy           memcpy
-        #define MSVCRT$vsnprintf        vsnprintf
-
-        #define OLEAUT32$SysStringLen   SysStringLen
-        #endif
-
-        #ifndef BOF_OUTPUT_BUFFER_SIZE
+    #ifndef BOF_OUTPUT_BUFFER_SIZE
         #define BOF_OUTPUT_BUFFER_SIZE 8192
     #endif
 
@@ -59,8 +57,8 @@ extern "C"
             return FALSE;
         }
 
-        bofOut->buffer = (PCHAR)KERNEL32$HeapAlloc(
-            KERNEL32$GetProcessHeap(),
+        bofOut->buffer = (PCHAR)HeapAlloc(
+            GetProcessHeap(),
             HEAP_ZERO_MEMORY,
             BOF_OUTPUT_BUFFER_SIZE
         );
@@ -88,8 +86,8 @@ extern "C"
 
         if (buffer->buffer != NULL)
         {
-            KERNEL32$HeapFree(
-                KERNEL32$GetProcessHeap(),
+            HeapFree(
+                GetProcessHeap(),
                 0,
                 buffer->buffer
             );
@@ -117,7 +115,7 @@ extern "C"
         }
 
         va_start(args, format);
-        length = MSVCRT$vsnprintf(NULL, 0, format, args);
+        length = vsnprintf(NULL, 0, format, args);
         va_end(args);
 
         if (length < 0)
@@ -125,9 +123,9 @@ extern "C"
             return FALSE;
         }
 
-        hHeap = KERNEL32$GetProcessHeap();
+        hHeap = GetProcessHeap();
 
-        szTemp = (PCHAR)KERNEL32$HeapAlloc(
+        szTemp = (PCHAR)HeapAlloc(
             hHeap,
             0,
             (SIZE_T)length + 1
@@ -139,12 +137,12 @@ extern "C"
         }
 
         va_start(args, format);
-        MSVCRT$vsnprintf(szTemp, length + 1, format, args);
+        vsnprintf(szTemp, length + 1, format, args);
         va_end(args);
 
         bResult = BofBufferAppend(bofOut, szTemp, (SIZE_T)length);
 
-        KERNEL32$HeapFree(hHeap, 0, szTemp);
+        HeapFree(hHeap, 0, szTemp);
 
         return bResult;
     }
@@ -176,7 +174,7 @@ extern "C"
                 cBytesToCopy = length;
             }
 
-            MSVCRT$memcpy(
+            memcpy(
                 buffer->buffer + buffer->used,
                 data,
                 cBytesToCopy
@@ -235,10 +233,10 @@ extern "C"
             return S_OK;
         }
 
-        len = OLEAUT32$SysStringLen(src);
+        len = SysStringLen(src);
 
-        *dst = (PWCHAR)KERNEL32$HeapAlloc(
-            KERNEL32$GetProcessHeap(),
+        *dst = (PWCHAR)HeapAlloc(
+            GetProcessHeap(),
             HEAP_ZERO_MEMORY,
             (len + 1) * sizeof(WCHAR)
         );
@@ -248,7 +246,7 @@ extern "C"
             return E_OUTOFMEMORY;
         }
 
-        MSVCRT$memcpy(
+        memcpy(
             *dst,
             src,
             (len + 1) * sizeof(WCHAR));

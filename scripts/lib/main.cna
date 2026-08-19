@@ -22,7 +22,7 @@ $CMD_OUT_CONSOLE = 4;
 beacon_command_group(
     "operatorskit",
     "OperatorsKit",
-    "Exmaple blah blah."
+    "TODO: Add brief description of operators kit"
 );
 
 sub check_file_exists
@@ -75,7 +75,7 @@ sub parse_command
         {
            if ($i + 1 >= size(@tokens))
             {
-                berror($bid, "Missing file path after '" . $token . "'");
+                berror($bid, "Missing folder path after '" . $token . "'");
                 return $null;
             }
 
@@ -165,16 +165,10 @@ sub handle_output
     # A redirect was requested but no file path was supplied.
     if (%cmd["file"] eq "")
     {
-        berror($bid, "No output file specified. Writing to console instead.");
+        berror($bid, "No output path specified. Writing to console instead.");
         blog($bid, "\n" . $output);
         return;
     }
-
-    # Select overwrite or append mode.
-    # if ($append)
-    # {
-    #     $mode = ">>";
-    # }
 
     # Attempt to write the output.
     $fh = openf($mode . %cmd["file"]);
