@@ -27,7 +27,7 @@ S_SCRIPT_ONLY: Final[str]  = 'script-only'
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parent
 
-BOFS_DIR: Path    = Path("bofs")
+BOFS_DIR: Path    = Path("kit")
 BUILD_DIR: Path   = Path("build")
 DEBUG_DIR: Path   = BUILD_DIR / S_DEBUG
 RELEASE_DIR: Path = BUILD_DIR / S_RELEASE
@@ -574,7 +574,7 @@ if __name__ == "__main__":
             f"Unknown project(s):\n  {', '.join(invalid_projects)}\n"
             f"Valid projects:\n  {', '.join(proj_choices)}"
         )
-        sys.exit(False)
+        sys.exit(1)
 
     if args.projects:
         proj_list = args.projects
@@ -589,13 +589,14 @@ if __name__ == "__main__":
         for k, v in errors.items():
             print(f"\n{k}\n{'-'*20}\n{C_RED + v + C_RESET}")
 
-        sys.exit(False)
+        sys.exit(1)
 
     print("")
 
-    result = compile_scripts()
+    if args.config == S_RELEASE:
+        result = compile_scripts()
 
-    if not result:
-        sys.exit(False)
+        if not result:
+            sys.exit(1)
 
-    sys.exit(True)
+    sys.exit(0)

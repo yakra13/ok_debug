@@ -1,41 +1,43 @@
 {
     "version": "0.2.0",
     "configurations": [
-        // {
-        //     "name": "Debug BOF",
-        //     "type": "cppvsdbg",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}/build/debug/${input:arch}/${fileDirnameBasename}.exe",
-        //     "cwd": "${workspaceFolder}",
-        //     "stopAtEntry": false,
-        //     "console": "integratedTerminal",
-        //     "symbolSearchPath": "${workspaceFolder}"
-        // },
-        // {
-        //     "name": "Debug BOF (x64)",
-        //     "type": "cppvsdbg",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}/build/debug/x64/${fileDirnameBasename}.exe",
-        //     "cwd": "${workspaceFolder}",
-        //     "stopAtEntry": false,
-        //     "console": "integratedTerminal",
-        //     "symbolSearchPath": "${workspaceFolder}"
-        // },
-        // {
-        //     "name": "Debug BOF (x86)",
-        //     "type": "cppvsdbg",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}/build/debug/x86/${fileDirnameBasename}.exe",
-        //     "cwd": "${workspaceFolder}",
-        //     "stopAtEntry": false,
-        //     "console": "integratedTerminal",
-        //     "symbolSearchPath": "${workspaceFolder}"
-        // },
         {
-            "name": "64 EnumHandles",
+            "name": "EnumFiles",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/debug/x64/enumhandles.exe",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumfiles.exe",
+            "args":[
+                "${input:enumfiles_directory}",
+                "${input:enumfiles_pattern}",
+                "${input:enumfiles_keyword}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
+        // {
+        //     "name": "86 EnumFiles",
+        //     "type": "cppvsdbg",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}/build/debug/x8g/enumfiles.exe",
+        //     "args":[
+        //         "${input:enumfiles_directory}",
+        //         "${input:enumfiles_pattern}",
+        //         "${input:enumfiles_keyword}"
+        //     ],
+        //     "cwd": "${workspaceFolder}",
+        //     "stopAtEntry": false,
+        //     "console": "integratedTerminal",
+        //     "symbolSearchPath": "${workspaceFolder}",
+        //     "preLaunchTask": "Build All x86 - Debug"
+        // },
+        {
+            "name": "EnumHandles",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumhandles.exe",
             "args":[
                 "${input:enumhandles_search}",
                 "${input:enumhandles_query}",
@@ -45,7 +47,7 @@
             "stopAtEntry": false,
             "console": "integratedTerminal",
             "symbolSearchPath": "${workspaceFolder}",
-            "preLaunchTask": "Build All x64 - Debug"
+            "preLaunchTask": "Build All ${input:arch} - Debug"
         },
         {
             "name": "86 EnumHandles",
@@ -65,6 +67,34 @@
         },
     ],
     "inputs": [
+        {
+            "id": "arch",
+            "type": "pickString",
+            "description": "Architecutre to use.",
+            "options": ["x86", "x64"],
+            "default": "x64"
+        },
+        //------------------------------------------------------------------------------
+        // EnumFiles Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumfiles_directory",
+            "type": "promptString",
+            "description": "Directory to search",
+            "default": ""
+        },
+        {
+            "id": "enumfiles_pattern",
+            "type": "promptString",
+            "description": "Pattern to search for. Supports wildcard.",
+            "default": ""
+        },
+        {
+            "id": "enumfiles_keyword",
+            "type": "promptString",
+            "description": "Keyword to search for in text files. Optional",
+            "default": ""
+        },
         //------------------------------------------------------------------------------
         // EnumHandles Args
         //------------------------------------------------------------------------------

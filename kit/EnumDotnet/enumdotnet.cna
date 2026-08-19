@@ -1,0 +1,23 @@
+beacon_command_register(
+    "enumdotnet",
+    "\c0Find processes that most likely have .NET loaded.\o",
+    "\c7Find processes that most likely have .NET loaded by searching for the section name:\n\o" .
+    "\c7      \\BaseNamedObjects\\Cor_Private_IPCBlock(_v4)_<ProcessId>\o\n\n" .
+    
+    "USAGE:\n" .
+    "  enumdotnet\n\n",
+    "operatorskit"
+);
+
+alias enumdotnet {
+    $bid = $1;
+	
+    # Read in the right BOF file
+    $handle = openf(script_resource("enumdotnet.o"));
+    $data   = readb($handle, -1);
+    closef($handle);
+
+    blog($bid, "Tasked to search for processes that have .NET loaded..");
+
+    beacon_inline_execute($bid, $data, "go", $null);
+}

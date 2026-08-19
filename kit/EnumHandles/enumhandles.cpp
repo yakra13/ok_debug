@@ -10,9 +10,9 @@
  *      is linked against the the debug build.
  */
 #ifdef _DEBUG
-#undef DECLSPEC_IMPORT
-#define DECLSPEC_IMPORT
-#include "base\mock.h"
+	#undef DECLSPEC_IMPORT
+	#define DECLSPEC_IMPORT
+	#include "base\mock.h"
 #endif
 
 extern "C" {

@@ -1,0 +1,442 @@
+# Description
+$SUPPORTS_FILE_OUT_MESSAGE = "Supports writing to file:\n" .
+"  Output to file only:\n" .
+"    \c7command <args>\o \c9> <path/to/folder/>\o\n" .
+"    \c7command <args>\o \c9>> <path/to/folder/>\o\n" .
+"  Output to file and console:\n" .
+"    \c7command <args>\o \c9>| <path/to/folder/>\o\n" .
+"    \c7command <args>\o \c9>>| <path/to/folder/>\o\n" .
+"\n";
+
+$CMD_REDIRECT_STDOUT = 1;
+$CMD_APPEND_FILE = 2;
+$CMD_OUT_CONSOLE = 4;
+
+%REDIRECT_LOOKUP = %(
+    >   => $CMD_REDIRECT_STDOUT,
+    >>  => $CMD_REDIRECT_STDOUT | $CMD_APPEND_FILE,
+    >|  => $CMD_REDIRECT_STDOUT | $CMD_OUT_CONSOLE,
+    >>| => $CMD_REDIRECT_STDOUT | $CMD_OUT_CONSOLE | $CMD_APPEND_FILE
+);
+
+beacon_command_group(
+    "operatorskit",
+    "OperatorsKit",
+    "TODO: Add brief description of operators kit"
+);
+
+sub check_file_exists
+{
+    local('$file_path $fp');
+
+    ($file_path) = @_;
+
+    $fp = [new java.io.File: $file_path];
+
+    if ([$fp exists])
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub parse_command
+{
+    local('$bid %result @command @args @tokens');
+    local('$arch $flags $file_path');
+    local('$i $token');
+
+    @command = @_[0];
+    $bid = (@command);
+    $arch = "";
+    $flags = 0;
+    $file_path = "";
+    @args = @();
+    @tokens = sublist(@command, 1);
+    %result = %();
+
+    for ($i = 0; $i < size(@tokens); $i++)
+    {
+        $token = @tokens[$i];
+
+        if ($token eq "ARCH_x86")
+        {
+            $arch = "x86";
+            continue;
+        }
+        else if($token eq "ARCH_x64")
+        {
+            $arch = "x64";
+            continue;
+        }
+
+        if (%REDIRECT_LOOKUP[$token] !is $null)
+        {
+           if ($i + 1 >= size(@tokens))
+            {
+                berror($bid, "Missing folder path after '" . $token . "'");
+                return $null;
+            }
+
+            $flags |= %REDIRECT_LOOKUP[$token];
+            $file_path = @tokens[$i + 1];
+
+            if (substr($file_path, -1) !eq "/")
+            {
+                $file_path .= "/"
+            }
+
+            break;
+        }
+        else
+        {
+            push(@args, $token);
+        }
+    }
+
+    %result["args"]  = @args;
+    %result["flags"] = $flags;
+    %result["file"]  = $file_path;
+    %result["arch"]  = $arch;
+
+    return %result;
+}
+
+sub generate_file_name
+{
+    local('$bid $path $name');
+    local('%info $source $timestamp $full_path');
+
+    ($bid, $path, $name) = (@_);
+
+    %info      = beacon_info($bid);
+    $source    = $bid;
+    $timestamp = formatDate("yyyyMMddHHmm");
+
+    if (%info["computer"] ne "")
+    {
+        $source = %info["computer"];
+    }
+    else if (%info["host"] ne "")
+    {
+        $source = %info["host"];
+    }
+
+    if (substr($path, -1) !eq "/")
+    {
+        $path .= "/"
+    }
+
+    $full_path = $path . $timestamp . "_" . $source . "_" . $name . ".yml";
+
+    return $full_path;
+}
+
+sub handle_output
+{
+    local('$bid $output %info %cmd');
+    local('$mode $fh');
+    local('$redirect $echo $append');
+
+    ($bid, $output, %info, %cmd) = @_;
+
+    $fh = $null;
+    $mode = ">>"; # Always append to handle multiple callbacks
+
+    $redirect = (%cmd["flags"] & $CMD_REDIRECT_STDOUT);
+    $echo     = (%cmd["flags"] & $CMD_OUT_CONSOLE);
+    $append   = (%cmd["flags"] & $CMD_APPEND_FILE);
+
+    # Handle non-output callbacks immediately.
+    if (%info["type_id"] == 0x0d) # eq "error")
+    {
+        berror($bid, $output);
+        return;
+    }
+
+    # Ignore callback types we don't explicitly handle.
+    if ((!$redirect) || (%info["type_id"] ne 0x00)) # "output"))
+    {
+        blog($bid, "\n" . $output);
+        return;
+    }
+
+    # A redirect was requested but no file path was supplied.
+    if (%cmd["file"] eq "")
+    {
+        berror($bid, "No output path specified. Writing to console instead.");
+        blog($bid, "\n" . $output);
+        return;
+    }
+
+    # Attempt to write the output.
+    $fh = openf($mode . %cmd["file"]);
+
+    if ($fh is $null)
+    {
+        berror($bid, "Unable to open file: " . %cmd["file"]);
+        berror($bid, "Writing output to the console instead.");
+
+        blog($bid, "\n" . $output);
+        return;
+    }
+
+    writeb($fh, $output);
+    closef($fh);
+
+    blog($bid, "Output written to file: " . %cmd["file"]);
+
+    # Optionally echo redirected output to the console.
+    if ($echo)
+    {
+        blog($bid, "\n" . $output);
+    }
+}
+
+sub handle_output_beacon_inline_execute
+{
+    local('$bid $bof $entry %cmd $args');
+    local('$x64_path $x86_path $local_path');
+    local('$resolved_path');
+
+    ($bid, $bof, $entry, %cmd, $args) = @_;
+    
+    $x64_path   = script_resource("x64/" . $bof);
+    $x86_path   = script_resource("x86/" . $bof);
+    $local_path = script_resource($bof);
+
+
+    if (%cmd["arch"] eq "x64")
+    {
+        # x64 path was specified by user
+        $resolved_path = $x64_path;
+    }
+    else if (%cmd["arch"] eq "x86")
+    {
+        # x86 path was specified by user
+        $resolved_path = $x86_path;
+    }
+    else
+    {
+        # No path specified
+        # Check next to script then x64 folder
+        if (check_file_exists($local_path) == 0)
+        {
+            if (check_file_exists($x64_path) == 0)
+            {
+                berror($bid,
+                    "Could not find BOF in default paths:\n" .
+                    "  " . $local_path . "\n" .
+                    "  " . $x64_path);
+
+                return;
+            }
+            else
+            {
+                $resolved_path = $x64_path;
+            }
+        }
+        else
+        {
+            $resolved_path = $local_path;
+        }
+    }
+
+    if (check_file_exists($resolved_path) == 0)
+    {
+        berror($bid, "Could not find BOF: " . $resolved_path);
+        return;
+    }
+
+    $handle = openf($resolved_path);
+
+    if ($handle is $null)
+    {
+        berror($bid, "Failed to open BOF: " . $resolved_path);
+        return;
+    }
+
+    $data = readb($handle, -1);
+    closef($handle);
+
+    # Create callback function to handle output
+    $callback = lambda({
+        local('$cbid $output %info');
+
+        ($cbid, $output, %info) = @_;
+
+        handle_output($cbid, $output, %info, $cmd);
+    }, $cmd => %cmd);
+
+    beacon_inline_execute(
+        $bid,
+        $data,
+        $entry,
+        $args,
+        $callback
+    );
+}
+
+# ------------------------------------------------------------------------------------
+#                                Individual BOFs
+# ------------------------------------------------------------------------------------
+
+#
+# kit\EnumFiles\enumfiles.cna
+#
+
+beacon_command_register(
+    "enumfiles",
+    "/c0Search for matching files based on a word, extention or keyword.\o",
+    "\c7Search for matching files based on a word, extention or keyword in the file content. Wildcards are supported.\o\n" .
+    "\c7Keyword matching only works for text based files.\o\n\n" .
+	
+    "ARGUMENTS:\n" .
+    "  [<path to directory>]: specify a path to the directory from which to start searching (recursive searching supported).\n" .
+    "  [<search pattern>]: specify a single word or extention to search for (support wildcards).\n" .
+    "  [<keyword>]: leave empty OR specify a keyword to search for in text based files (support wildcards).\n\n" .
+	
+    "USAGE:\n" .
+    "  enumfiles <path to directory> <search pattern> <(optional) keyword> \n\n" .
+	
+    "EXAMPLES:\n" .
+    "  enumfiles C:\\Users\\RTO\\Documents *.xlsx\n" .
+    "  enumfiles C:\\Users\\RTO *login*.* username\n" .
+    "  enumfiles C:\\Users\\RTO *.txt *pass*\n\n",
+    "operatorskit"
+);
+
+alias enumfiles
+{
+    $bid = $1;
+	$lpDirectory = $2;
+    $lpSearchPattern = $3;
+    $keyword = $4;
+
+    if ($lpDirectory eq "")
+    {
+        berror($bid, "Please specify a path to a directory.\n");
+        return;
+    }
+
+    if ($lpSearchPattern eq "")
+    {
+        berror($bid, "Please specify a pattern/word to search for.\n");
+        return;
+    }
+
+    # Read in the right BOF file
+    $handle = openf(script_resource("enumfiles.o"));
+    $data   = readb($handle, -1);
+    closef($handle);
+
+    # Pack our arguments
+    $arg_data  = bof_pack($bid, "zzz", $lpDirectory, $lpSearchPattern, $keyword);
+
+    blog($bid, "Tasked to search for matching files..");
+    beacon_inline_execute($bid, $data, "go", $arg_data);
+}
+
+#
+# kit\EnumHandles\enumhandles.cna
+#
+
+beacon_command_register(
+    "enumhandles",
+    "\c0Find process and thread handle types between processes.\o",
+    "\c7Find process and thread handle types between processes.\o\n\n" .
+    
+    "OPTIONS:\n" .
+    "  [all]: list all processes with handles to all other processes\n" .
+    "  [h2p]: list all processes that have a handle to a specific process\n" .
+    "  [p2h]: list handles from a specific process to all other processes\n\n" .
+    
+    "Handle Query Options:\n" .
+    "  [proc]: search for PROCESS type handles\n" .
+    "  [thread]: search for THREAD type handles\n\n" .
+    
+    "Targeted Search Options:\n" .
+    "  [<pid>]: for both the [h2p] and [p2h] search options, specify the PID of the process your interested in.\n\n" .
+    
+    "USAGE:\n" .
+    "  enumhandles all <proc | thread>\n" .
+    "  enumhandles h2p <proc | thread> <pid>\n" .
+    "  enumhandles p2h <proc | thread> <pid>\n\n",
+    "operatorskit"
+);
+
+alias enumhandles
+{
+    local('$bid %cmd $arg_data $bof_path $output_name');
+
+    ($bid) = @_;
+
+    $bof_path    = "enumhandles.o";
+	$output_name = "enum_handles";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $search = %cmd["args"][0];
+    $query  = %cmd["args"][1];
+    $pid    = %cmd["args"][2];
+
+    #
+    # Validation
+    #
+
+    if ($search eq "")
+    {
+        berror($bid, "Please specify one of the following search options: all | h2p | p2h\n");
+        return;
+    }
+
+    if ($search ne "all" || $search ne "h2p" || $search ne "p2h")
+    {
+        berror($bid, "This option isn't supported. Please specify one of the following search options: all | h2p | p2h\n");
+        return;
+    }
+        
+    if ($query eq "")
+    {
+        berror($bid, "Please specify one of the following handle types to search for: proc | thread\n");
+        return;
+    }
+
+    if ($query ne "proc" || $query ne "thread")
+    {
+        berror($bid, "This handle type isn't supported. Please specify one of the following handle types to search for: proc | thread\n");
+        return;
+    }
+
+    if ($search ne "all" && $pid eq "")
+    {
+        berror($bid, "Please specify the pid to target a specific process.\n");
+        return;
+    }
+
+    #
+    # Pack our arguments
+    #
+
+    if ($pid eq "")
+    {
+        $arg_data  = bof_pack($bid, "zz", $search, $query);
+    }
+    else
+    {
+        $arg_data  = bof_pack($bid, "zzi", $search, $query, $pid);
+    }
+
+    blog($bid, "Tasked to enumerate handles..");
+
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
+}

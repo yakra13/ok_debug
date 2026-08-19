@@ -1,0 +1,50 @@
+beacon_command_register(
+	"delexclusion",
+    "\c0Delete an exclusion from Windows Defender for a folder, file, process or extension.\o",
+    "\c7Delete an exclusion from Windows Defender for a folder, file, process or extension.\o\n\n" .
+
+	"ARGUMENTS:\n" .
+    "  [<exclusion type>]: specify one of the following exclusion types you want to delete: path (file/folder), process, extension.\n" .
+    "  [<exclusion name>]: specify the exclusion data/name that you want to delete.\n\n" .
+	
+    "USAGE:\n" .
+    "  delexclusion <exclusion type> <exclusion data>\n\n" .
+	
+    "EXAMPLES:\n" .
+    "  delexclusion path C:\\Users\\Public\\Downloads\n" .
+    "  delexclusion process C:\\Windows\\System32\\example.exe\n\n",
+    "operatorskit"
+);
+	
+alias delexclusion {
+    $bid = $1;
+    $excltype = $2;
+    $excldata = $3;
+
+    if ($excltype eq "") {
+        berror($bid, "Please specify one of the following extension types: path | process | extension.\n");
+        return;
+    }
+
+    if ($excltype eq "path" || $excltype eq "process" || $excltype eq "extension") {
+        if ($excldata eq "") {
+            berror($bid, "Please specify the exclusion data/name that you want to delete.\n");
+            return;
+        }
+    }
+    else {
+        berror($bid, "This exclusion type isn't supported. Please specify one of the following options: path | process | extension.\n");
+        return;
+    }
+	
+    # Read in the right BOF file
+    $handle = openf(script_resource("delexclusion.o"));
+    $data   = readb($handle, -1);
+    closef($handle);
+
+    # Pack our arguments
+    $arg_data  = bof_pack($bid, "zZ", $excltype, $excldata);
+
+    blog($bid, "Tasked to add a new exclusion..");
+    beacon_inline_execute($bid, $data, "go", $arg_data);
+}
