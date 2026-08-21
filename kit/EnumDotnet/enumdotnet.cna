@@ -9,15 +9,26 @@ beacon_command_register(
     "operatorskit"
 );
 
-alias enumdotnet {
-    $bid = $1;
-	
-    # Read in the right BOF file
-    $handle = openf(script_resource("enumdotnet.o"));
-    $data   = readb($handle, -1);
-    closef($handle);
+alias enumdotnet
+{
+    local('$bid %cmd $arg_data $bof_path $output_name');
 
+    ($bid) = @_;
+
+    $bof_path    = "enumdotnet.o";
+	$output_name = "enum_dotnet";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+    
     blog($bid, "Tasked to search for processes that have .NET loaded..");
 
-    beacon_inline_execute($bid, $data, "go", $null);
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $null);
 }

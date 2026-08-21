@@ -1,6 +1,6 @@
 #pragma once
 #include <windows.h>
-//#include <winternl.h>
+// #include <winternl.h>
 
 //#define ObjectNameInformation 1
 //#define SystemExtendedHandleInformation 64
