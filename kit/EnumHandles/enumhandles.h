@@ -7,7 +7,6 @@
 //#ifdef _DEBUG
     #include <Shlwapi.h>
     #include <Psapi.h>
-    #include <stdio.h>
 
     #pragma comment(lib, "Shlwapi.lib")
     #pragma comment(lib, "Psapi.lib")

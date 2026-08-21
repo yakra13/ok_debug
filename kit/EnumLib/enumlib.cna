@@ -10,11 +10,12 @@ beacon_command_register(
     "  [list]: list all loaded modules in a remote process.\n\n" .
     "USAGE:\n" .
     "  enumlib search <module name>\n" .
-    "enumlib list <pid>\n\n",
+    "  enumlib list <pid>\n\n",
     "operatorskit"
 );
 
-alias enumlib {
+alias enumlib 
+{
     $bid = $1;
     $option = $2;
     $target = $3;

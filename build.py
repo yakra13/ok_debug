@@ -283,8 +283,6 @@ class BuildSystem:
         debug_out   = BUILD_DIR / cfg / arch
         object_dir  = output_root / arch
 
-        
-
         # Check if built file(s) already exists
         built_files = self._get_built_files(proj_name, cfg, arch)
 
@@ -292,21 +290,18 @@ class BuildSystem:
             has_exe: bool = True
             has_pdb: bool = True
 
-            oldest_source: float = get_oldest_modified(project, [".c", ".cpp", ".h"])
+            newest_source: float = get_newest_modified(project, [".c", ".cpp", ".h"])
             oldest_built: float = min(file.stat().st_mtime for file in built_files)
 
             if cfg == S_DEBUG:
                 has_exe = any(file.suffix.lower() == '.exe' for file in built_files)
                 has_pdb = any(file.suffix.lower() == '.pdb' for file in built_files)
 
-            # If the existing exe is newer than the source
-            # we can skip
-            if oldest_built > oldest_source:
+            # If the existing exe is newer than the source; we can skip
+            if oldest_built >= newest_source:
                 # Even if the built is newer it must have both files
                 if has_exe and has_pdb:
                     return BuildResult.UP_TO_DATE, None
-
-
 
         # Append this projects directory to the include directories
         INCLUDES.append(project)
@@ -342,7 +337,7 @@ class BuildSystem:
                 )
             except FileNotFoundError as err:
                 return BuildResult.FAIL, str(err)
-            
+
             ret, stdout, stderr = self._run_with_spinner(
                 POWERSHELL_CMD +  [' '.join(link_cmd)],
                 self._env[arch]
@@ -366,16 +361,16 @@ class BuildSystem:
 
         return BuildResult.SUCCESS, None
 
-def get_oldest_modified(dir: Path, extensions: Iterable[str]) -> float:
+def get_newest_modified(dir: Path, extensions: Iterable[str]) -> float:
     extensions = {ext.lower().lstrip(".") for ext in extensions}
 
-    files = (
+    files = [
         file
         for file in dir.rglob("*")
         if file.is_file() and file.suffix.lower().lstrip(".") in extensions
-    )
+    ]
 
-    return min(
+    return max(
         (file.stat().st_mtime for file in files),
         default=0.0
     )

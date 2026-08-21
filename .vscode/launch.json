@@ -2,6 +2,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "CaptureNetNTLM",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/capturenetntlm.exe",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
+        {
             "name": "EnumDotnet",
             "type": "cppvsdbg",
             "request": "launch",
@@ -50,22 +61,6 @@
             "symbolSearchPath": "${workspaceFolder}",
             "preLaunchTask": "Build All ${input:arch} - Debug"
         },
-        // {
-        //     "name": "86 EnumFiles",
-        //     "type": "cppvsdbg",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}/build/debug/x8g/enumfiles.exe",
-        //     "args":[
-        //         "${input:enumfiles_directory}",
-        //         "${input:enumfiles_pattern}",
-        //         "${input:enumfiles_keyword}"
-        //     ],
-        //     "cwd": "${workspaceFolder}",
-        //     "stopAtEntry": false,
-        //     "console": "integratedTerminal",
-        //     "symbolSearchPath": "${workspaceFolder}",
-        //     "preLaunchTask": "Build All x86 - Debug"
-        // },
         {
             "name": "EnumHandles",
             "type": "cppvsdbg",
@@ -83,21 +78,21 @@
             "preLaunchTask": "Build All ${input:arch} - Debug"
         },
         {
-            "name": "86 EnumHandles",
+            "name": "EnumLib",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/debug/x86/enumhandles.exe",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumlib.exe",
             "args":[
-                "${input:enumhandles_search}",
-                "${input:enumhandles_query}",
-                "${input:enumhandles_pid}"
+                "${input:enumlib_option}",
+                "${input:enumlib_module_or_pid}"
             ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
             "symbolSearchPath": "${workspaceFolder}",
-            "preLaunchTask": "Build All x86 - Debug"
+            "preLaunchTask": "Build All ${input:arch} - Debug"
         },
+        
     ],
     "inputs": [
         {
@@ -150,6 +145,22 @@
             "type": "promptString",
             "description": "Target PID - Required when using h2p or p2h",
             "default": "0"
-        }
+        },
+        //------------------------------------------------------------------------------
+        // EnumLib Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumlib_option",
+            "type": "pickString",
+            "description": "Search all processes; handles to a specific process; handles of a specific process",
+            "options": ["search", "list"],
+            "default": "list"
+        },
+        {
+            "id": "enumlib_module_or_pid",
+            "type": "promptString",
+            "description": "Target module name (search) or PID (list)",
+            "default": "0"
+        },
     ]
 }

