@@ -15,7 +15,7 @@ extern "C" {
 
 BOF_Buffer buffer = { 0 };
 
-BOOL ListModules(int pid, char *targetModName)
+BOOL ListModulePIDs(int pid, char *targetModName)
 {
     HANDLE hProcess;
     MEMORY_BASIC_INFORMATION mbi;
@@ -52,7 +52,7 @@ BOOL ListModules(int pid, char *targetModName)
 							sizeof(fqModPath) / sizeof(TCHAR)
 						);
 						// internal_printf("\nModulePath:\t%s\nModuleAddr:\t%#llx\n", fqModPath, mbi.AllocationBase);
-						BofPrintf(&buffer, "      - { path: %s, base_addr: %#llx }\n", fqModPath, mbi.AllocationBase);
+						BofPrintf(&buffer, "    - { path: %s, base_addr: %#llx, ", fqModPath, mbi.AllocationBase);
 						foundModule = TRUE;
 					}
 				}
@@ -60,8 +60,60 @@ BOOL ListModules(int pid, char *targetModName)
 			// check the next region
 			base += mbi.RegionSize;
 		}
-		else
-		{
+	}
+
+	CloseHandle(hProcess);
+	
+	return foundModule;
+}
+
+BOOL ListPIDModules(int pid) //, char *targetModName)
+{
+    HANDLE hProcess;
+    MEMORY_BASIC_INFORMATION mbi;
+    char * base = NULL;
+	BOOL foundModule = FALSE;
+
+    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+	
+	if (hProcess == NULL)
+		return foundModule;
+
+	while (VirtualQueryEx(hProcess, base, &mbi, sizeof(mbi)) == sizeof(MEMORY_BASIC_INFORMATION))
+	{
+		char fqModPath[MAX_PATH];
+		char modName[MAX_PATH];
+
+		// if(targetModName != NULL)
+		// {
+		// 	// only focus on the base address regions
+		// 	if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
+		// 	{
+		// 		if (K32GetModuleBaseNameA(
+		// 			hProcess,
+		// 			(HMODULE)mbi.AllocationBase,
+		// 			(LPSTR)modName,
+		// 			sizeof(modName) / sizeof(TCHAR)
+		// 		))
+		// 		{
+		// 			if(strcmp(targetModName, modName) == 0)
+		// 			{
+		// 				K32GetModuleFileNameExA(hProcess,
+		// 					(HMODULE)mbi.AllocationBase,
+		// 					(LPSTR)fqModPath,
+		// 					sizeof(fqModPath) / sizeof(TCHAR)
+		// 				);
+		// 				// internal_printf("\nModulePath:\t%s\nModuleAddr:\t%#llx\n", fqModPath, mbi.AllocationBase);
+		// 				BofPrintf(&buffer, "      - { path: %s, base_addr: %#llx }\n", fqModPath, mbi.AllocationBase);
+		// 				foundModule = TRUE;
+		// 			}
+		// 		}
+		// 	}
+		// 	// check the next region
+		// 	base += mbi.RegionSize;
+		// }
+		// else
+		// {
 			// only focus on the base address regions
 			if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
 			{
@@ -79,7 +131,7 @@ BOOL ListModules(int pid, char *targetModName)
 			}
 			// check the next region
 			base += mbi.RegionSize;
-		}
+		// }
 	}
 
 	CloseHandle(hProcess);
@@ -108,13 +160,19 @@ BOOL FindProcess(char *targetModName)
 		procID = GetProcessId(currentProc);
 		
 		if (procID == 4)
+		{
 			continue;
+		}
 
 		if (procID == GetCurrentProcessId())
+		{
 			continue;
+		}
 
 		if (procID != 0)
-			foundProc = ListModules(procID, targetModName);
+		{
+			foundProc = ListModulePIDs(procID, targetModName);
+		}
 
 		if(foundProc)
 		{
@@ -123,7 +181,7 @@ BOOL FindProcess(char *targetModName)
 			strncpy(procName, PathFindFileNameA(procPath), MAX_PATH);
 			
 			// internal_printf("ProcName:\t%s\nProcID:\t\t%d\nProcPath:\tC:\%s\n", procName, procID, procPath);
-			BofPrintf(&buffer, "    - { id: %d, name: %s, path: %s }\n", procID, procName, procPath);
+			BofPrintf(&buffer, " pid: %d, name: %s, path: %s }\n", procID, procName, procPath);
 			res = TRUE;
 		}
 	}
@@ -153,25 +211,25 @@ void go(char *args, int len)
 		pid = BeaconDataInt(&parser);
 		// targetModName = BeaconDataExtract(&parser, NULL);
 	
-		BeaconPrintf(CALLBACK_OUTPUT, "[*] Start enumerating loaded modules for PID: %d\n\n", pid);
+		// BeaconPrintf(CALLBACK_OUTPUT, "[*] Start enumerating loaded modules for PID: %d\n\n", pid);
 
 		BofPrintf(&buffer, "loaded_modules:\n");
-		BofPrintf(&buffer, "  - pid: %d\n", pid);
+		BofPrintf(&buffer, "  pid: %d\n", pid);
 
 	
 		// internal_printf("[+] FOUND MODULES:\n==============================================================\n"); 
 	
-		res = ListModules(pid, NULL);
+		res = ListPIDModules(pid); //, NULL);
 	}
 	else if (strcmp(option, "search") == 0)
 	{
 		targetModName = BeaconDataExtract(&parser, NULL);
 	
-		BeaconPrintf(CALLBACK_OUTPUT, "[*] Start enumerating processes that loaded module: %s\n[!] Can take some time..\n\n", targetModName);
+		// BeaconPrintf(CALLBACK_OUTPUT, "[*] Start enumerating processes that loaded module: %s\n[!] Can take some time..\n\n", targetModName);
 	
 		// internal_printf("[+] FOUND PROCESSES:\n==============================================================\n"); 
 		BofPrintf(&buffer, "loaded_modules:\n");
-		BofPrintf(&buffer, "  - module: %s\n", targetModName);
+		BofPrintf(&buffer, "  module: %s\n", targetModName);
 
 		res = FindProcess(targetModName);
 	}
@@ -212,7 +270,7 @@ int main(int argc, char* argv[])
 	else if (strcmp(argv[1], "list") == 0)
 	{
 		int pid = static_cast<int>(std::strtol(argv[2], nullptr, 10));
-		printf("pid is %d\n");
+		// printf("pid is %d\n");
 
 		bof::runMocked<char*&, int&>(go, argv[1], pid);
 	}
