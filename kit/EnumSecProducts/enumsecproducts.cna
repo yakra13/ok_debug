@@ -17,19 +17,42 @@ beacon_command_register(
 );
 
 
-alias enumsecproducts {
-    $bid = $1;
-    $remotehost = $2;
+alias enumsecproducts
+{
+    local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$remotehost');
 
-    # read in the right BOF file
-    $handle = openf(script_resource("enumsecproducts.o"));
-    $data = readb($handle, -1);
-    closef($handle);
+    ($bid) = @_;
 
+    $bof_path    = "enumsecproducts.o";
+	$output_name = "enum_sec_products";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $remotehost = %cmd["args"][0];
+
+    #
     # pack our arguments
+    #
     $arg_data = bof_pack($bid, "z", $remotehost);
 
-    blog($bid, "Tasked to list running security products..");
-    beacon_inline_execute($bid, $data, "go", $arg_data);
+    if ($remotehost -eq $null)
+    {
+        blog($bid, "Tasked to list running security products on local host...");
+    }
+    else
+    {
+        blog($bid, "Tasked to list running security products on " . $remotehost . "...");
+    }
+
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }
 

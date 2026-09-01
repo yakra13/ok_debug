@@ -12,26 +12,47 @@ beacon_command_register(
     "operatorskit"
 );
 
-alias enumrwx {
-    $bid = $1;
-    $pid = $2;
+alias enumrwx
+{
+    local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$pid');
 
-    if ($pid eq "") {
+    ($bid) = @_;
+
+    $bof_path    = "enumrwx.o";
+	$output_name = "enum_rwx";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $pid = %cmd["args"][0];
+
+    #
+    # Validation
+    #
+
+    if ($pid eq "")
+    {
         berror($bid, "Please make sure that the PID of the target process is specified.");
         return;
     }
 
-    # Read in the right BOF file
-    $handle = openf(script_resource("enumrwx.o"));
-    $data   = readb($handle, -1);
-    closef($handle);
-
+    #
     # Pack our arguments
+    #
+
     $arg_data  = bof_pack($bid, "i", $pid);
 
     blog($bid, "Tasked to verify if the target process has RWX memory regions..");
 
-    beacon_inline_execute($bid, $data, "go", $arg_data);
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }
 
 

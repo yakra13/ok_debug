@@ -179,7 +179,6 @@ void go(char *args, int len)
 
 	if (req == 0)
 	{
-		BeaconPrintf(CALLBACK_ERROR, "MultiByteToWideChar failed: %lu", GetLastError());
 		goto cleanup;
 	}
 
@@ -187,7 +186,6 @@ void go(char *args, int len)
 
 	if (MultiByteToWideChar(CP_ACP, 0, store, -1, wStore, req) == 0)
 	{
-		BeaconPrintf(CALLBACK_ERROR, "MultiByteToWideChar failed: %lu", GetLastError());
 		goto cleanup;
 	}
 
@@ -202,8 +200,7 @@ void go(char *args, int len)
 	
 	if (!hStore)
 	{
-		DWORD error = GetLastError();
-		BeaconPrintf(CALLBACK_ERROR, "Failed to open specified certificate store: error %lu\n", error);
+		BeaconPrintf(CALLBACK_ERROR, "Failed to open specified certificate store\n");
 		goto cleanup;
 	}
 

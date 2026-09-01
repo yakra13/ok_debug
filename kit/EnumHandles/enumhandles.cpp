@@ -22,7 +22,7 @@ extern "C" {
 // Global output buffer for beacon CALLBACK_OUTPUT
 // You can use CALLBACK_OUTPUT_UTF8 to send updates to CS stdout
 // Ensure to call BofBufferFree() when done to return any remaining data to CS
-BOF_Buffer outputBuffer = { 0 };
+BOF_Buffer buffer = { 0 };
 
 BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 {
@@ -279,7 +279,7 @@ BOOL GetHandlesEx(ULONG_PTR basePid, BYTE flags, ULONG_PTR targetPid)
 			}
 			
 			BofPrintf(
-				&outputBuffer,
+				&buffer,
 				"  - { from_proc: %s, from_pid: %llu, to_proc: %s, to_pid: %llu, handle_obj: %#llx, access_rights: %#x }\n",
 				procHostName,
 				objHandle->UniqueProcessId, //KERNEL32$GetProcessId(processHandle),
@@ -340,7 +340,7 @@ void go(char* args, int len)
 	// char computerName[MAX_COMPUTERNAME_LENGTH + 1] = {0};
     // DWORD nameSize = sizeof(computerName);
 
-	if (!BofBufferInit(&outputBuffer))
+	if (!BofBufferInit(&buffer))
 	{
 		goto cleanup;
 	}
@@ -362,12 +362,12 @@ void go(char* args, int len)
 	if (strcmp(query, "proc") == 0)
 	{
 		flags = QUERY_PROC;
-		BofPrintf(&outputBuffer, "  process_handles:\n");
+		BofPrintf(&buffer, "  process_handles:\n");
 	}
 	else if (strcmp(query, "thread") == 0)
 	{
 		flags = QUERY_THREAD;
-		BofPrintf(&outputBuffer, "  thread_handles:\n");
+		BofPrintf(&buffer, "  thread_handles:\n");
 	}
 	else
 	{
@@ -411,7 +411,7 @@ cleanup:
 		BeaconPrintf(CALLBACK_ERROR, "No handle found for this search query!\n");
 	}
 
-	BofBufferFree(&outputBuffer);
+	BofBufferFree(&buffer);
 }
 } // End extern "C"
 

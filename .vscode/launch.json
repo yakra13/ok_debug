@@ -119,6 +119,20 @@
             "console": "integratedTerminal",
             "symbolSearchPath": "${workspaceFolder}",
             "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
+        {
+            "name": "EnumSecProducts",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumsecproducts.exe",
+            "args":[
+                "${input:enumsecproducts_target}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
         }, 
     ],
     "inputs": [
@@ -198,13 +212,21 @@
             "description": "ex: ROOT, MY, TRUST, CA, USERDS, AuthRoot, Disallowed",
             "default": "ROOT"
         },
-                //------------------------------------------------------------------------------
+        //------------------------------------------------------------------------------
         // EnumRWX Args
         //------------------------------------------------------------------------------
         {
             "id": "enumrwx_pid",
             "type": "promptString",
             "description": "process pid to enumerate",
+        },
+        //------------------------------------------------------------------------------
+        // EnumSecProducts Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumsecproducts_target",
+            "type": "promptString",
+            "description": "FQDN or IP of target host or empty for local",
         },
     ]
 }
