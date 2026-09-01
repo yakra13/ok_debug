@@ -337,8 +337,8 @@ void go(char* args, int len)
 	
 	BOOL result = FALSE;
 
-	char computerName[MAX_COMPUTERNAME_LENGTH + 1] = {0};
-    DWORD nameSize = sizeof(computerName);
+	// char computerName[MAX_COMPUTERNAME_LENGTH + 1] = {0};
+    // DWORD nameSize = sizeof(computerName);
 
 	if (!BofBufferInit(&outputBuffer))
 	{
