@@ -22,6 +22,11 @@ BOOL ListModulePIDs(int pid, char *targetModName)
     char * base = NULL;
 	BOOL foundModule = FALSE;
 
+	if (targetModName == NULL)
+	{
+		return FALSE;
+	}
+
     hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
 	
 	if (hProcess == NULL)
@@ -32,34 +37,30 @@ BOOL ListModulePIDs(int pid, char *targetModName)
 		char fqModPath[MAX_PATH];
 		char modName[MAX_PATH];
 
-		if(targetModName != NULL)
+		// only focus on the base address regions
+		if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
 		{
-			// only focus on the base address regions
-			if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
+			if (K32GetModuleBaseNameA(
+				hProcess,
+				(HMODULE)mbi.AllocationBase,
+				(LPSTR)modName,
+				sizeof(modName) / sizeof(TCHAR)
+			))
 			{
-				if (K32GetModuleBaseNameA(
-					hProcess,
-					(HMODULE)mbi.AllocationBase,
-					(LPSTR)modName,
-					sizeof(modName) / sizeof(TCHAR)
-				))
+				if(strcmp(targetModName, modName) == 0)
 				{
-					if(strcmp(targetModName, modName) == 0)
-					{
-						K32GetModuleFileNameExA(hProcess,
-							(HMODULE)mbi.AllocationBase,
-							(LPSTR)fqModPath,
-							sizeof(fqModPath) / sizeof(TCHAR)
-						);
-						// internal_printf("\nModulePath:\t%s\nModuleAddr:\t%#llx\n", fqModPath, mbi.AllocationBase);
-						BofPrintf(&buffer, "    - { path: %s, base_addr: %#llx, ", fqModPath, mbi.AllocationBase);
-						foundModule = TRUE;
-					}
+					K32GetModuleFileNameExA(hProcess,
+						(HMODULE)mbi.AllocationBase,
+						(LPSTR)fqModPath,
+						sizeof(fqModPath) / sizeof(TCHAR)
+					);
+					BofPrintf(&buffer, "    - { path: %s, base_addr: %#llx, ", fqModPath, mbi.AllocationBase);
+					foundModule = TRUE;
 				}
 			}
-			// check the next region
-			base += mbi.RegionSize;
 		}
+		// check the next region
+		base += mbi.RegionSize;
 	}
 
 	CloseHandle(hProcess);
@@ -67,7 +68,7 @@ BOOL ListModulePIDs(int pid, char *targetModName)
 	return foundModule;
 }
 
-BOOL ListPIDModules(int pid) //, char *targetModName)
+BOOL ListPIDModules(int pid)
 {
     HANDLE hProcess;
     MEMORY_BASIC_INFORMATION mbi;
@@ -84,54 +85,23 @@ BOOL ListPIDModules(int pid) //, char *targetModName)
 		char fqModPath[MAX_PATH];
 		char modName[MAX_PATH];
 
-		// if(targetModName != NULL)
-		// {
-		// 	// only focus on the base address regions
-		// 	if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
-		// 	{
-		// 		if (K32GetModuleBaseNameA(
-		// 			hProcess,
-		// 			(HMODULE)mbi.AllocationBase,
-		// 			(LPSTR)modName,
-		// 			sizeof(modName) / sizeof(TCHAR)
-		// 		))
-		// 		{
-		// 			if(strcmp(targetModName, modName) == 0)
-		// 			{
-		// 				K32GetModuleFileNameExA(hProcess,
-		// 					(HMODULE)mbi.AllocationBase,
-		// 					(LPSTR)fqModPath,
-		// 					sizeof(fqModPath) / sizeof(TCHAR)
-		// 				);
-		// 				// internal_printf("\nModulePath:\t%s\nModuleAddr:\t%#llx\n", fqModPath, mbi.AllocationBase);
-		// 				BofPrintf(&buffer, "      - { path: %s, base_addr: %#llx }\n", fqModPath, mbi.AllocationBase);
-		// 				foundModule = TRUE;
-		// 			}
-		// 		}
-		// 	}
-		// 	// check the next region
-		// 	base += mbi.RegionSize;
-		// }
-		// else
-		// {
-			// only focus on the base address regions
-			if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
+		// only focus on the base address regions
+		if ((mbi.AllocationBase == mbi.BaseAddress) && (mbi.AllocationBase != NULL))
+		{
+			if (K32GetModuleFileNameExA(
+				hProcess,
+				(HMODULE)mbi.AllocationBase,
+				(LPSTR)fqModPath,
+				sizeof(fqModPath) / sizeof(TCHAR)
+			))
 			{
-				if (K32GetModuleFileNameExA(
-					hProcess,
-					(HMODULE)mbi.AllocationBase,
-					(LPSTR)fqModPath,
-					sizeof(fqModPath) / sizeof(TCHAR)
-				))
-				{
-					// internal_printf("ModulePath [%#llx]: %s\n", mbi.AllocationBase, fqModPath);
-					BofPrintf(&buffer, "    - { path: %s, base_addr: %#llx }\n", fqModPath, mbi.AllocationBase);
-					foundModule = TRUE;
-				}
+				// internal_printf("ModulePath [%#llx]: %s\n", mbi.AllocationBase, fqModPath);
+				BofPrintf(&buffer, "    - { path: %s, base_addr: %#llx }\n", fqModPath, mbi.AllocationBase);
+				foundModule = TRUE;
 			}
-			// check the next region
-			base += mbi.RegionSize;
-		// }
+		}
+		// check the next region
+		base += mbi.RegionSize;
 	}
 
 	CloseHandle(hProcess);
@@ -180,7 +150,6 @@ BOOL FindProcess(char *targetModName)
 			
 			strncpy(procName, PathFindFileNameA(procPath), MAX_PATH);
 			
-			// internal_printf("ProcName:\t%s\nProcID:\t\t%d\nProcPath:\tC:\%s\n", procName, procID, procPath);
 			BofPrintf(&buffer, " pid: %d, name: %s, path: %s }\n", procID, procName, procPath);
 			res = TRUE;
 		}
@@ -209,7 +178,6 @@ void go(char *args, int len)
 	if (strcmp(option, "list") == 0)
 	{
 		pid = BeaconDataInt(&parser);
-		// targetModName = BeaconDataExtract(&parser, NULL);
 	
 		// BeaconPrintf(CALLBACK_OUTPUT, "[*] Start enumerating loaded modules for PID: %d\n\n", pid);
 
@@ -227,7 +195,6 @@ void go(char *args, int len)
 	
 		// BeaconPrintf(CALLBACK_OUTPUT, "[*] Start enumerating processes that loaded module: %s\n[!] Can take some time..\n\n", targetModName);
 	
-		// internal_printf("[+] FOUND PROCESSES:\n==============================================================\n"); 
 		BofPrintf(&buffer, "loaded_modules:\n");
 		BofPrintf(&buffer, "  module: %s\n", targetModName);
 
@@ -270,7 +237,6 @@ int main(int argc, char* argv[])
 	else if (strcmp(argv[1], "list") == 0)
 	{
 		int pid = static_cast<int>(std::strtol(argv[2], nullptr, 10));
-		// printf("pid is %d\n");
 
 		bof::runMocked<char*&, int&>(go, argv[1], pid);
 	}

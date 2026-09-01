@@ -349,14 +349,14 @@ void go(char* args, int len)
 	search = BeaconDataExtract(&parser, NULL);
 	query = BeaconDataExtract(&parser, NULL);
 
-	if (GetComputerNameA(computerName, &nameSize))
-    {
-        BofPrintf(&outputBuffer, "%s:\n", computerName);
-    }
-    else
-    {
-        BofPrintf(&outputBuffer, "UNKNOWN:\n");
-    }
+	// if (GetComputerNameA(computerName, &nameSize))
+    // {
+    //     BofPrintf(&outputBuffer, "%s:\n", computerName);
+    // }
+    // else
+    // {
+    //     BofPrintf(&outputBuffer, "UNKNOWN:\n");
+    // }
 
 
 	if (strcmp(query, "proc") == 0)

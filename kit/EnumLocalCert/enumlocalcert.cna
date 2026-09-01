@@ -15,24 +15,46 @@ beacon_command_register(
 	"operatorskit"
 );
 	
-alias enumlocalcert {
-    $bid = $1;
-    $store = $2;
+alias enumlocalcert
+{
+	local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$store');
 
-	if ($store eq "") {
+    ($bid) = @_;
+
+    $bof_path    = "enumlocalcert.o";
+	$output_name = "enum_local_cert";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $store = %cmd["args"][0];
+
+    #
+    # Validation
+    #
+
+	if ($store eq "")
+	{
 		berror($bid, "Please specify a valid local computer certificate store name like ROOT.\n");
 		return;
 	}
 	
-    # Read in the right BOF file
-    $handle = openf(script_resource("enumlocalcert.o"));
-    $data   = readb($handle, -1);
-    closef($handle);
+	#
+    # Pack arguments
+    #
 
-	# Pack our arguments
     $arg_data  = bof_pack($bid, "Z", $store);
 
-	blog($bid, "Tasked to list certificates from the local computer store..");
-    beacon_inline_execute($bid, $data, "go", $arg_data);
+	blog($bid, "Tasked to list certificates from the local computer store...");
+
+	handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }
 
