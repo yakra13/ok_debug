@@ -14,13 +14,16 @@ beacon_command_register(
 );
 
 
-alias enumsysmon {
+alias enumsysmon
+{
     $bid = $1;
     $action = $2;
 
-    if ($action eq "reg" || $action eq "driver") {
+    if ($action eq "reg" || $action eq "driver")
+    {
     }
-    else {
+    else
+    {
         berror($bid, "Please specify one of the following enumeration options: reg | driver\n");
         return;
     }
