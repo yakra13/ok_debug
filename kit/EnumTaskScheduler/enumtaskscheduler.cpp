@@ -1,4 +1,19 @@
+#include <Windows.h>
+#include "base\helpers.h"
 #include "enumtaskscheduler.h"
+#include "bofoutput.h"
+
+#ifdef _DEBUG
+	#undef DECLSPEC_IMPORT
+	#define DECLSPEC_IMPORT
+	#include "base\mock.h"
+#endif
+
+extern "C" {
+#include "beacon.h"
+#include "sleepmask.h"
+
+BOF_Buffer buffer = { 0 };
 
 HRESULT EnumScheduledTasks(PWCHAR host, BOF_Buffer* buffer)
 {
@@ -17,14 +32,16 @@ HRESULT EnumScheduledTasks(PWCHAR host, BOF_Buffer* buffer)
 
 	VARIANT vHost;
 	VARIANT vNULL;
+
+	BSTR rootPath = SysAllocString(L"\\");
 	
-	OLEAUT32$VariantInit(&vHost);
-	OLEAUT32$VariantInit(&vNULL);
+	VariantInit(&vHost);
+	VariantInit(&vNULL);
     
 	vHost.vt = VT_BSTR;
-    vHost.bstrVal = OLEAUT32$SysAllocString(host);
+    vHost.bstrVal = SysAllocString(host);
 
-	hr = OLE32$CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
 
 	switch (hr)
 	{
@@ -37,15 +54,21 @@ HRESULT EnumScheduledTasks(PWCHAR host, BOF_Buffer* buffer)
 			goto cleanup;
 	}
 
-    HR_CHECK(OLE32$CoCreateInstance(&CTaskScheduler, NULL, CLSCTX_INPROC_SERVER, &IIDITaskService, (VOID**)&pTaskService));
+    HR_CHECK(CoCreateInstance(
+		CTaskScheduler,
+		NULL,
+		CLSCTX_INPROC_SERVER,
+		IIDITaskService,
+		(VOID**)&pTaskService)
+	);
     
-    HR_CHECK(pTaskService->lpVtbl->Connect(pTaskService, vHost, vNULL, vNULL, vNULL)); 
+    HR_CHECK(pTaskService->Connect(vHost, vNULL, vNULL, vNULL)); 
 	
-    HR_CHECK(pTaskService->lpVtbl->GetFolder(pTaskService, L"\\", &pRootFolder));
+    HR_CHECK(pTaskService->GetFolder(rootPath, &pRootFolder));
     
-    HR_CHECK(pRootFolder->lpVtbl->GetTasks(pRootFolder, 0, &pTaskCollection));
+    HR_CHECK(pRootFolder->GetTasks(0, &pTaskCollection));
     
-    hr = pTaskCollection->lpVtbl->get_Count(pTaskCollection, &numTasks);
+    hr = pTaskCollection->get_Count(&numTasks);
 
 	for (LONG i = 1; i <= numTasks; i++)
 	{ 
@@ -56,13 +79,13 @@ HRESULT EnumScheduledTasks(PWCHAR host, BOF_Buffer* buffer)
 		index.vt = VT_I4;
 		index.lVal = i;
 
-		hr = pTaskCollection->lpVtbl->get_Item(pTaskCollection, index, &pRegisteredTask);
+		hr = pTaskCollection->get_Item(index, &pRegisteredTask);
 		if (FAILED(hr))
 		{
 			continue;
 		}
 		
-		hr = pRegisteredTask->lpVtbl->get_Name(pRegisteredTask, &taskName);
+		hr = pRegisteredTask->get_Name(&taskName);
 		if (SUCCEEDED(hr))
 		{
 			// BofPrintf(buffer, "    %ls:\n", taskName);
@@ -70,18 +93,18 @@ HRESULT EnumScheduledTasks(PWCHAR host, BOF_Buffer* buffer)
 			SAFE_SYSFREE_STRING(taskName);
 		}
 		
-		hr = pRegisteredTask->lpVtbl->get_Definition(pRegisteredTask, &pTaskDef);
+		hr = pRegisteredTask->get_Definition(&pTaskDef);
 		if (SUCCEEDED(hr))
 		{
 			// Fetching the Principal information and print the user account
 			IPrincipal* pPrincipal = NULL;
 
-			hr = pTaskDef->lpVtbl->get_Principal(pTaskDef, &pPrincipal);
+			hr = pTaskDef->get_Principal(&pPrincipal);
 			if (SUCCEEDED(hr))
 			{
 				BSTR userId = NULL;
 				
-				hr = pPrincipal->lpVtbl->get_UserId(pPrincipal, &userId);
+				hr = pPrincipal->get_UserId(&userId);
 				if (SUCCEEDED(hr))
 				{
 					// BofPrintf(buffer, "      context: %ls\n", userId);
@@ -94,17 +117,17 @@ HRESULT EnumScheduledTasks(PWCHAR host, BOF_Buffer* buffer)
 
 			// Fetching Action Information
 
-			hr = pRegisteredTask->lpVtbl->get_Definition(pRegisteredTask, &pTaskDef);
+			hr = pRegisteredTask->get_Definition(&pTaskDef);
 			if (SUCCEEDED(hr))
 			{
 				IActionCollection* pActionColl = NULL;
 			
-				hr = pTaskDef->lpVtbl->get_Actions(pTaskDef, &pActionColl);
+				hr = pTaskDef->get_Actions(&pActionColl);
 				if (SUCCEEDED(hr))
 				{
 					LONG actionCount = 0;
 
-					hr = pActionColl->lpVtbl->get_Count(pActionColl, &actionCount);
+					hr = pActionColl->get_Count(&actionCount);
 					if (SUCCEEDED(hr))
 					{
 						for (LONG actionIndex = 1; actionIndex <= actionCount; actionIndex++)
@@ -283,3 +306,65 @@ cleanup:
 
 	return 0;
 }
+} // End extern "C"
+
+// Define a main function for the debug build
+#if defined(_DEBUG) && !defined(_GTEST)
+
+int main(int argc, char* argv[])
+{
+	int reqArgCount = 4;
+
+	// Run BOF's entrypoint
+	// To pack arguments for the bof use e.g.: bof::runMocked<int, short, const char*>(go, 6502, 42, "foobar");
+
+	if (argc != reqArgCount)
+	{
+		printf("Usage ... need the args");
+		return 1;
+	}
+
+	// Convert string to integer - Ignoring error checking as this part of the code does not ship
+	int pid = static_cast<int>(std::strtol(argv[3], nullptr, 10));
+
+	bof::runMocked<char*&, char*&, int&>(go, argv[1], argv[2], pid);
+
+	/* To test a sleepmask BOF, the following mockup executors can be used
+	// Mock up Beacon and run the sleep mask once
+	bof::runMockedSleepMask(sleep_mask);
+
+	// Mock up Beacon with the specific .stage C2 profile
+	bof::runMockedSleepMask(sleep_mask,
+		{
+			.allocator = bof::profile::Allocator::VirtualAlloc,
+			.obfuscate = bof::profile::Obfuscate::False,
+			.useRWX = bof::profile::UseRWX::True,
+			.module = "",
+		},
+		{
+			.sleepTimeMs = 5000,
+			.runForever = false,
+		}
+	);
+	*/
+
+	return 0;
+}
+
+// Define unit tests
+#elif defined(_GTEST)
+#include <gtest\gtest.h>
+
+TEST(BofTest, Test1) {
+	std::vector<bof::output::OutputEntry> got =
+		bof::runMocked<>(go);
+	std::vector<bof::output::OutputEntry> expected = {
+		{CALLBACK_OUTPUT, "System Directory: C:\\Windows\\system32"}
+	};
+	// It is possible to compare the OutputEntry vectors, like directly
+	// ASSERT_EQ(expected, got);
+	// However, in this case, we want to compare the output, ignoring the case.
+	ASSERT_EQ(expected.size(), got.size());
+	ASSERT_STRCASEEQ(expected[0].output.c_str(), got[0].output.c_str());
+}
+#endif

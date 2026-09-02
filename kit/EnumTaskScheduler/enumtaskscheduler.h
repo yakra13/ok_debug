@@ -1,17 +1,8 @@
+#pragma once
+#include "base/helpers.h"
+
+#include <Windows.h>
 #include <taskschd.h>
-#include "..\..\common\bof_output.h"
-
-DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoCreateInstance (REFCLSID rclsid, LPUNKNOWN pUnkOuter, DWORD dwClsContext, REFIID riid, LPVOID *ppv);
-DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoInitializeEx(LPVOID pvReserved, DWORD dwCoInit);
-DECLSPEC_IMPORT VOID    WINAPI OLE32$CoUninitialize(void);
-
-DECLSPEC_IMPORT VOID    WINAPI OLEAUT32$VariantInit(VARIANTARG *pvarg);
-DECLSPEC_IMPORT VOID    WINAPI OLEAUT32$VariantClear(VARIANTARG *pvarg);
-
-WINBASEAPI BOOL WINAPI KERNEL32$GetComputerNameA(LPSTR lpBuffer,LPDWORD nSize);
-
-WINBASEAPI BSTR WINAPI OLEAUT32$SysAllocString(const OLECHAR *);
-WINBASEAPI VOID WINAPI OLEAUT32$SysFreeString(BSTR);
 
 //
 // Macros
@@ -22,10 +13,10 @@ WINBASEAPI VOID WINAPI OLEAUT32$SysFreeString(BSTR);
     do { hr = (x); if (FAILED(hr)) { goto lbl; } } while (0);
 
 #define SAFE_INTERFACE_RELEASE(pI) \
-    do { if (pI) { pI->lpVtbl->Release(pI); pI = NULL; } } while (0);
+    do { if (pI) { pI->Release(); pI = NULL; } } while (0);
 
 #define SAFE_SYSFREE_STRING(x) \
-    do { if (x) { OLEAUT32$SysFreeString(x); x = NULL; } } while (0);
+    do { if (x) { SysFreeString(x); x = NULL; } } while (0);
 
 //
 // COM Identifiers
@@ -35,7 +26,7 @@ WINBASEAPI VOID WINAPI OLEAUT32$SysFreeString(BSTR);
 #define IID_IEXEC_ACTION   {0x4c3d624d, 0xfd6b, 0x49a3, {0xb9, 0xb7, 0x09, 0xcb, 0x3c, 0xd3, 0xf0, 0x47}}
 #define IID_ITASK_SERVICE  {0x2faba4c7, 0x4da9, 0x4013, {0x96, 0x97, 0x20, 0xcc, 0x3f, 0xd4, 0x0f, 0x85}}
 
-PWCHAR TRIGGER_TYPE_NAMES_LOOKUP[] = {
+const WCHAR* TRIGGER_TYPE_NAMES_LOOKUP[] = {
 	L"EVENT",              //L"On an event",
 	L"TIME",               //L"On a schedule",
 	L"DAILY",              //L"Daily",
@@ -49,3 +40,26 @@ PWCHAR TRIGGER_TYPE_NAMES_LOOKUP[] = {
 	L"INVALID",
 	L"SESSION_STATE_CHANGE"//L"SessionStateChange (lock/unlock/connection)"
 };
+
+//
+// Imports
+//
+extern "C" {
+#ifndef _DEBUG
+DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoCreateInstance (REFCLSID rclsid, LPUNKNOWN pUnkOuter, DWORD dwClsContext, REFIID riid, LPVOID *ppv);
+DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoInitializeEx(LPVOID pvReserved, DWORD dwCoInit);
+DECLSPEC_IMPORT VOID    WINAPI OLE32$CoUninitialize(void);
+
+DECLSPEC_IMPORT VOID    WINAPI OLEAUT32$VariantInit(VARIANTARG *pvarg);
+DECLSPEC_IMPORT VOID    WINAPI OLEAUT32$VariantClear(VARIANTARG *pvarg);
+
+WINBASEAPI BOOL WINAPI KERNEL32$GetComputerNameA(LPSTR lpBuffer,LPDWORD nSize);
+
+WINBASEAPI BSTR WINAPI OLEAUT32$SysAllocString(const OLECHAR *);
+WINBASEAPI VOID WINAPI OLEAUT32$SysFreeString(BSTR);
+#endif
+}
+#ifndef _DEBUG
+
+#endif
+
