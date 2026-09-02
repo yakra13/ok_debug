@@ -24,9 +24,6 @@ PSHARE_INFO_1 listShares(wchar_t* servername)
 
     NET_API_STATUS nStatus;
 
-    // internal_printf("\n\nListing shares for: %ls\n", servername);
-    // internal_printf("=====================================================\n");
-	
     do
     {
         nStatus = NetShareEnum(
@@ -43,14 +40,11 @@ PSHARE_INFO_1 listShares(wchar_t* servername)
         {
             for (DWORD i = 0; i < dwEntriesRead; i++)
             {
-                // internal_printf("Share Name: %-10ls <- ", pShareInfo[i].shi1_netname);
-                // BofPrintf(&buffer, "  - host: %s\n", hostname);
                 BofPrintf(&buffer, "    - { name: %ls", pShareInfo[i].shi1_netname);
 				
 				if (lstrcmpW(pShareInfo[i].shi1_netname, L"IPC$") == 0)
                 {
-                    internal_printf("[!] No file system access\n");
-                    BofPrintf(&buffer, " }/n", pShareInfo[i].shi1_netname);
+                    BofPrintf(&buffer, " }\n");
                     continue;
                 }
 				
@@ -68,18 +62,19 @@ PSHARE_INFO_1 listShares(wchar_t* servername)
                 useInfo.ui2_remote = fullPath;
                 useInfo.ui2_asg_type = USE_DISKDEV; 
                 useInfo.ui2_username = NULL; // Use current user's credentials
-                useInfo.ui2_password = L"";
+                useInfo.ui2_password = nullptr; //L"";
 				
                 nStatus = NetUseAdd(NULL, 2, (LPBYTE)&useInfo, NULL);
 
                 if (nStatus == NERR_Success)
                 {
-                    internal_printf("[+] Accessible\n");
+                    BofPrintf(&buffer, ", accessible: true }\n", pShareInfo[i].shi1_netname);
+
                     NetUseDel(NULL, fullPath, USE_LOTS_OF_FORCE);
                 }
                 else
                 {
-                    internal_printf("[-] Error access denied\n");
+                    BofPrintf(&buffer, ", accessible: false }\n", pShareInfo[i].shi1_netname);
                 }
             }
 			
@@ -91,15 +86,15 @@ PSHARE_INFO_1 listShares(wchar_t* servername)
         {
             if (nStatus == ERROR_BAD_NETPATH)
             {
-                internal_printf("Connection error: ERROR_BAD_NETPATH\n");
+                BofPrintf(&buffer, "    net_api_status_error: ERROR_BAD_NETPATH\n");
 			}
             else if (nStatus == ERROR_ACCESS_DENIED)
             {
-                internal_printf("Connection error: ERROR_ACCESS_DENIED\n");
+                BofPrintf(&buffer, "    net_api_status_error: ERROR_ACCESS_DENIED\n");
             }
             else
             {
-                internal_printf("Connection error code: %d\n", nStatus);
+                BofPrintf(&buffer, "    net_api_status_error: %d\n", nStatus);
             }
 
             break;
@@ -129,8 +124,6 @@ void go(char *args, int len)
 
 	if(iBytesLen != 0)
     {
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] Loaded hostname file in memory with a size of %d bytes\n", iBytesLen); 
-		
         hostname = strtok(hostFileBytes, "\r\n");
 
         BofPrintf(&buffer, "network_shares:\n");
@@ -150,9 +143,6 @@ void go(char *args, int len)
 
             hostname = strtok(NULL, "\r\n");
         }
-
-		// printoutput(TRUE);
-		BeaconPrintf(CALLBACK_OUTPUT, "[+] Finished enumerating!\n"); 
     }
     else
     {
@@ -167,6 +157,8 @@ cleanup:
 
 // Define a main function for the debug build
 #if defined(_DEBUG) && !defined(_GTEST)
+#include <fstream>
+#include <vector>
 
 int main(int argc, char* argv[])
 {
@@ -181,7 +173,29 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	bof::runMocked<char*&>(go, argv[1]);
+    std::ifstream file(argv[1], std::ios::binary | std::ios::ate);
+
+    if (!file)
+    {
+        printf("Failed to open file\n");
+        return 1;
+    }
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    char* data = new char[size + 1];
+
+    if (!file.read(data, size))
+    {
+        delete[] data;
+        printf("Failed to read file\n");
+        return 1;
+    }
+
+    data[size] = '\0';
+
+	bof::runMocked<char*&>(go, data);
 
 	return 0;
 }

@@ -18,14 +18,39 @@ beacon_command_register(
 	
 alias enumshares
 {
-    $bid = $1;
-	$path = $2;
+	local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$path $handle $file');
+
+    ($bid) = @_;
+
+    $bof_path    = "enumshares.o";
+	$output_name = "enum_shares";
+
+    %cmd = parse_command(@_);
+
+    if (%cmd is $null)
+    {
+        berror($bid, "Error parsing command\n");
+        return;
+    }
+
+    %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
+
+    $path = %cmd["args"][0];
+
+	#
+    # Validation
+    #
 	
 	if ($path eq "")
 	{
 		berror($bid, "Please specify the path on your own attacker system to the file containing the list with newline separated hostnames.\n");
 		return;
 	}
+
+	#
+	# Pack arguments
+	#
 
 	# read in the .txt file
 	$handle = openf("$path");
@@ -34,14 +59,9 @@ alias enumshares
 	
 	blog($bid, "path: $+  $path");
 	
-    # Read in the right BOF file
-    $handle = openf(script_resource("enumshares.o"));
-    $data = readb($handle, -1);
-    closef($handle);
-
-	# Pack our arguments
     $arg_data = bof_pack($bid, "b", $file);
 
-	blog($bid, "Tasked to enumerate remote shares..");
-    beacon_inline_execute($bid, $data, "go", $arg_data);
+	blog($bid, "Tasked to enumerate remote shares...");
+
+	handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }

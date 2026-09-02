@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.InteropServices;
 class AmsiPatch
 {
     // 1. Import necessary Windows API functions for memory manipulation

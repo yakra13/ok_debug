@@ -133,6 +133,20 @@
             "console": "integratedTerminal",
             "symbolSearchPath": "${workspaceFolder}",
             "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
+        {
+            "name": "EnumShares",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumshares.exe",
+            "args":[
+                "${input:enumshares_filepath}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
         }, 
     ],
     "inputs": [
@@ -227,6 +241,15 @@
             "id": "enumsecproducts_target",
             "type": "promptString",
             "description": "FQDN or IP of target host or empty for local",
+        },
+        //------------------------------------------------------------------------------
+        // EnumShares Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumshares_filepath",
+            "type": "promptString",
+            "description": "Path to file containing hostname targets",
+            "default": "kit/EnumShares/testing.txt"
         },
     ]
 }
