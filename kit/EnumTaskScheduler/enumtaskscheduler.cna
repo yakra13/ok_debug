@@ -19,8 +19,8 @@ beacon_command_register(
 
 alias enumtaskscheduler
 {
-    local('$bid %cmd $arg_data $host_name');
-    local('$bof_path $output_name');
+    local('$bid %cmd $arg_data $bof_path $output_name');
+    local('$host_name $recurse');
 
     ($bid) = @_;
 
@@ -38,8 +38,18 @@ alias enumtaskscheduler
     %cmd["file"] = generate_file_name($bid, %cmd["file"], $output_name);
 
     $host_name = %cmd["args"][0];
+    $recurse   = %cmd["args"][1];
 
-    $arg_data = bof_pack($bid, "Z", $host_name);
+    if ($recurse eq "")
+    {
+        $recurse = 0;
+    }
+    else
+    {
+        $recurse = 1;
+    }
+
+    $arg_data = bof_pack($bid, "Zi", $host_name, $recurse);
 
     blog($bid, "Tasked to enumerate scheduled tasks in the root folder of host: " . $host_name);
 

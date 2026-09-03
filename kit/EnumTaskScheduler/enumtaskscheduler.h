@@ -32,7 +32,7 @@
 
 const WCHAR* TRIGGER_TYPE_NAMES_LOOKUP[] = {
 	L"EVENT",              //L"On an event",
-	L"TIME",               //L"On a schedule",
+	L"TIME",               //L"On a schedule", once
 	L"DAILY",              //L"Daily",
 	L"WEEKLY",             //L"Weekly",
 	L"MONTHLY",            //L"Monthly",
@@ -42,7 +42,8 @@ const WCHAR* TRIGGER_TYPE_NAMES_LOOKUP[] = {
 	L"BOOT",               //L"At startup",
 	L"LOGON",              //L"At log on",
 	L"INVALID",
-	L"SESSION_STATE_CHANGE"//L"SessionStateChange (lock/unlock/connection)"
+	L"SESSION_STATE_CHANGE",//L"SessionStateChange (lock/unlock/connection)"
+	L"CUSTOM_TRIGGER_01"
 };
 
 //

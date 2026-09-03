@@ -15,27 +15,15 @@ extern "C" {
 
 BOF_Buffer buffer = { 0 };
 
-void EnumTasksInFolder(ITaskFolder* pFolder)
+void EnumTasksInFolder(ITaskFolder* pFolder, BOOL recurse)
 {
 	HRESULT hr = S_OK;
-	// BOOL bComInitialized = FALSE;
 
 	LONG numTasks = 0;
     ITaskFolderCollection* pSubFolders = NULL;
-    // IRegisteredTaskCollection* pTaskCollection = NULL;
-
-	// IID CTaskScheduler  = IID_TASK_SCHEDULER;
-    // IID IIDITaskService = IID_ITASK_SERVICE;
-	
-	// ITaskService* pTaskService = NULL;
-    // ITaskFolder* pRootFolder = NULL;
 	IRegisteredTaskCollection* pTaskCollection = NULL;
 	IRegisteredTask* pRegisteredTask = NULL;
 
-	// LONG numTasks = 0;
-
-	// VARIANT vHost;
-	// VARIANT vNULL;
 
     // 1. Get and process tasks in the CURRENT folder
     if (SUCCEEDED(pFolder->GetTasks(0, &pTaskCollection)))
@@ -44,25 +32,8 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
 
         for (LONG i = 1; i <= numTasks; i++)
 		{
-            // IRegisteredTask* pRegisteredTask = NULL;
-
             if (SUCCEEDED(pTaskCollection->get_Item(_variant_t(i), &pRegisteredTask)))
 			{
-                // BSTR taskPath = NULL;
-                
-				// if (SUCCEEDED(pRegisteredTask->get_Path(&taskPath)))
-				// {
-                //     wprintf(L"Task: %ls\n", taskPath); // This prints the full path!
-                //     SysFreeString(taskPath);
-                // }
-// ... extract action, triggers, context here ...
-
-				// HR_CHECK(pRootFolder->GetTasks(0, &pTaskCollection));
-				
-				// hr = pTaskCollection->get_Count(&numTasks);
-
-				// for (LONG i = 1; i <= numTasks; i++)
-				// { 
 				VARIANT index;
 				BSTR taskPath = NULL;
 				ITaskDefinition* pTaskDef = NULL;
@@ -76,11 +47,9 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
 					continue;
 				}
 				
-				// hr = pRegisteredTask->get_Name(&taskName);
 				hr = pRegisteredTask->get_Path(&taskPath);
 				if (SUCCEEDED(hr))
 				{
-					// BofPrintf(buffer, "    %ls:\n", taskName);
 					PWSTR wTaskPath;
 					CopyBSTRToWString(taskPath, &wTaskPath);
 
@@ -178,7 +147,7 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
 													break;
 											}
 
-											BofPrintf(&buffer, "        - { type: %ls, ", actionTypeName);
+											BofPrintf(&buffer, "        - { type: %ls", actionTypeName);
 
 											if (actionType == TASK_ACTION_EXEC)
 											{
@@ -191,11 +160,15 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
 
 												if (SUCCEEDED(hr))
 												{
-													BofPrintf(&buffer, "cmd: %ls %ls }\n", execPath, args ? args : L"");
+													BofPrintf(&buffer, ", cmd: '%ls %ls' }\n", execPath, args ? args : L"");
 												}
 
 												SAFE_SYSFREE_STRING(execPath);
 												SAFE_SYSFREE_STRING(args);
+											}
+											else
+											{
+												BofPrintf(&buffer, " }\n");
 											}
 										}
 
@@ -227,18 +200,20 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
 								if (SUCCEEDED(hr))
 								{
 									TASK_TRIGGER_TYPE2 triggerType;
-									const WCHAR* triggerTypeName = L"UNKNOWN";
+									const WCHAR* triggerTypeName = NULL;//L"UNKNOWN";
 								
 									hr = pTrigger->get_Type(&triggerType);
 									if (SUCCEEDED(hr))
 									{
-										if (triggerType >= 0 && ARRAYSIZE(TRIGGER_TYPE_NAMES_LOOKUP))
+										if (triggerType >= 0 && triggerType < ARRAYSIZE(TRIGGER_TYPE_NAMES_LOOKUP))
 										{
 											triggerTypeName = TRIGGER_TYPE_NAMES_LOOKUP[triggerType];
+											BofPrintf(&buffer, "%ls", triggerTypeName);
 										}
-
-										// BofPrintf(buffer, "        - %ls\n", triggerTypeName);
-										BofPrintf(&buffer, "%ls", triggerTypeName);
+										else
+										{
+											BofPrintf(&buffer, " UNKNOWN (%d)", triggerType);
+										}
 
 										if (triggerIndex < triggerCount)
 										{
@@ -258,21 +233,8 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
 
 					SAFE_INTERFACE_RELEASE(pTaskDef);
 				}
-				// }
 
-
-
-
-
-
-
-
-
-
-
-
-				//------------------------------------------------------------
-                pRegisteredTask->Release();
+				pRegisteredTask->Release();
             }
         }
 
@@ -280,7 +242,7 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
     }
 
     // 2. RECURSIVELY look into all subfolders
-    if (SUCCEEDED(pFolder->GetFolders(0, &pSubFolders)))
+    if (recurse && SUCCEEDED(pFolder->GetFolders(0, &pSubFolders)))
 	{
         LONG numFolders = 0;
         pSubFolders->get_Count(&numFolders);
@@ -292,7 +254,7 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
             if (SUCCEEDED(pSubFolders->get_Item(_variant_t(i), &pSubFolder)))
 			{
                 // Recursive call to dive deeper
-                EnumTasksInFolder(pSubFolder);
+                EnumTasksInFolder(pSubFolder, recurse);
                 pSubFolder->Release();
             }
         }
@@ -301,7 +263,7 @@ void EnumTasksInFolder(ITaskFolder* pFolder)
     }
 }
 
-HRESULT EnumScheduledTasks(PWCHAR host)
+HRESULT EnumScheduledTasks(PWCHAR host, BOOL recurse)
 {
     HRESULT hr = S_OK;
 	BOOL bComInitialized = FALSE;
@@ -311,8 +273,6 @@ HRESULT EnumScheduledTasks(PWCHAR host)
 	
 	ITaskService* pTaskService = NULL;
     ITaskFolder* pRootFolder = NULL;
-	// IRegisteredTaskCollection* pTaskCollection = NULL;
-	// IRegisteredTask* pRegisteredTask = NULL;
 
 	LONG numTasks = 0;
 
@@ -353,182 +313,9 @@ HRESULT EnumScheduledTasks(PWCHAR host)
     HR_CHECK(pTaskService->GetFolder(rootPath, &pRootFolder));
 
 	// Recursively enumerate tasks
-	EnumTasksInFolder(pRootFolder);
+	EnumTasksInFolder(pRootFolder, recurse);
     
-    // HR_CHECK(pRootFolder->GetTasks(0, &pTaskCollection));
-    
-    // hr = pTaskCollection->get_Count(&numTasks);
-
-	// for (LONG i = 1; i <= numTasks; i++)
-	// { 
-	// 	VARIANT index;
-	// 	BSTR taskName = NULL;
-	// 	ITaskDefinition* pTaskDef = NULL;
-	
-	// 	index.vt = VT_I4;
-	// 	index.lVal = i;
-
-	// 	hr = pTaskCollection->get_Item(index, &pRegisteredTask);
-	// 	if (FAILED(hr))
-	// 	{
-	// 		continue;
-	// 	}
-		
-	// 	// hr = pRegisteredTask->get_Name(&taskName);
-	// 	hr = pRegisteredTask->get_Path(&taskName);
-	// 	if (SUCCEEDED(hr))
-	// 	{
-	// 		// BofPrintf(buffer, "    %ls:\n", taskName);
-	// 		BofPrintf(&buffer, "    %ls:\n", taskName);
-	// 		SAFE_SYSFREE_STRING(taskName);
-	// 	}
-		
-	// 	hr = pRegisteredTask->get_Definition(&pTaskDef);
-	// 	if (SUCCEEDED(hr))
-	// 	{
-	// 		// Fetching the Principal information and print the user account
-	// 		IPrincipal* pPrincipal = NULL;
-
-	// 		hr = pTaskDef->get_Principal(&pPrincipal);
-	// 		if (SUCCEEDED(hr))
-	// 		{
-	// 			BSTR userId = NULL;
-				
-	// 			hr = pPrincipal->get_UserId(&userId);
-	// 			if (SUCCEEDED(hr))
-	// 			{
-	// 				// BofPrintf(buffer, "      context: %ls\n", userId);
-	// 				BofPrintf(&buffer, "      context: %ls\n", userId);
-	// 				SAFE_SYSFREE_STRING(userId);
-	// 			}
-
-	// 			SAFE_INTERFACE_RELEASE(pPrincipal);
-	// 		}
-
-	// 		// Fetching Action Information
-
-	// 		hr = pRegisteredTask->get_Definition(&pTaskDef);
-	// 		if (SUCCEEDED(hr))
-	// 		{
-	// 			IActionCollection* pActionColl = NULL;
-			
-	// 			hr = pTaskDef->get_Actions(&pActionColl);
-	// 			if (SUCCEEDED(hr))
-	// 			{
-	// 				LONG actionCount = 0;
-
-	// 				hr = pActionColl->get_Count(&actionCount);
-	// 				if (SUCCEEDED(hr))
-	// 				{
-	// 					for (LONG actionIndex = 1; actionIndex <= actionCount; actionIndex++)
-	// 					{
-	// 						IAction* pAction = NULL;
-
-	// 						hr = pActionColl->get_Item(actionIndex, &pAction);
-	// 						if (SUCCEEDED(hr))
-	// 						{
-	// 							TASK_ACTION_TYPE actionType;
-	// 							const WCHAR* actionTypeName = L"INVALID";
-							
-	// 							hr = pAction->get_Type(&actionType);
-	// 							if (SUCCEEDED(hr))
-	// 							{
-	// 								switch (actionType)
-	// 								{
-	// 									case TASK_ACTION_EXEC:
-	// 										actionTypeName = L"Start a program";
-	// 										break;
-	// 									case TASK_ACTION_COM_HANDLER:
-	// 										actionTypeName = L"COM Handler";
-	// 										break;
-	// 									case TASK_ACTION_SEND_EMAIL:
-	// 										actionTypeName = L"Send an e-mail (Deprecated)";
-	// 										break;
-	// 									case TASK_ACTION_SHOW_MESSAGE:
-	// 										actionTypeName = L"Display a message (Deprecated)";
-	// 										break;
-	// 								}
-
-	// 								BofPrintf(&buffer, "      action: %ls\n", actionTypeName);
-
-	// 								if (actionType == TASK_ACTION_EXEC)
-	// 								{
-	// 									IExecAction* pExecAction = (IExecAction*) pAction;
-	// 									BSTR execPath;
-									
-	// 									hr = pExecAction->get_Path(&execPath);
-	// 									if (SUCCEEDED(hr))
-	// 									{
-	// 										BofPrintf(&buffer, "      exe_path: %ls\n", execPath);
-	// 										SAFE_SYSFREE_STRING(execPath);
-	// 									}
-	// 								}
-	// 							}
-
-	// 							SAFE_INTERFACE_RELEASE(pAction);
-	// 						}
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-			
-	// 		// Fetching Trigger Information
-	// 		ITriggerCollection* pTriggerColl = NULL;
-
-	// 		hr = pTaskDef->get_Triggers(&pTriggerColl);
-	// 		if (SUCCEEDED(hr))
-	// 		{
-	// 			LONG triggerCount = 0;
-
-	// 			hr = pTriggerColl->get_Count(&triggerCount);
-	// 			if (SUCCEEDED(hr))
-	// 			{
-	// 				BofPrintf(&buffer, "      triggers: [ ");
-
-	// 				for (LONG triggerIndex = 1; triggerIndex <= triggerCount; triggerIndex++)
-	// 				{
-	// 					ITrigger* pTrigger = NULL;
-
-	// 					hr = pTriggerColl->get_Item(triggerIndex, &pTrigger);
-	// 					if (SUCCEEDED(hr))
-	// 					{
-	// 						TASK_TRIGGER_TYPE2 triggerType;
-	// 						const WCHAR* triggerTypeName = L"UNKNOWN";
-						
-	// 						hr = pTrigger->get_Type(&triggerType);
-	// 						if (SUCCEEDED(hr))
-	// 						{
-	// 							if (triggerType >= 0 && ARRAYSIZE(TRIGGER_TYPE_NAMES_LOOKUP))
-	// 							{
-	// 								triggerTypeName = TRIGGER_TYPE_NAMES_LOOKUP[triggerType];
-	// 							}
-
-	// 							// BofPrintf(buffer, "        - %ls\n", triggerTypeName);
-	// 							BofPrintf(&buffer, "%ls", triggerTypeName);
-
-	// 							if (triggerIndex < triggerCount)
-	// 							{
-	// 								BofPrintf(&buffer, ", ");
-	// 							}
-	// 						}
-
-	// 						SAFE_INTERFACE_RELEASE(pTrigger);
-	// 					}
-	// 				}
-
-	// 				BofPrintf(&buffer, " ]\n");
-	// 			}
-
-	// 			SAFE_INTERFACE_RELEASE(pTriggerColl);
-	// 		}
-
-	// 		SAFE_INTERFACE_RELEASE(pTaskDef);
-	// 	}
-	// }
-	
 cleanup:
-	// SAFE_INTERFACE_RELEASE(pRegisteredTask);
-    // SAFE_INTERFACE_RELEASE(pTaskCollection);
     SAFE_INTERFACE_RELEASE(pRootFolder);
     SAFE_INTERFACE_RELEASE(pTaskService);
 
@@ -547,11 +334,11 @@ void go(char *args, int len)
 {
 	HRESULT hr = -1;
 		
-	// BOF_Buffer buffer = {0};
 	datap parser;
 	PCHAR hostName = NULL; 
 	int required_chars = 0;
 	PWCHAR wHostName = NULL;
+	BOOL recurse = FALSE;
 
     if (!BofBufferInit(&buffer))
     {
@@ -560,6 +347,7 @@ void go(char *args, int len)
 
 	BeaconDataParse(&parser, args, len);
 	hostName = BeaconDataExtract(&parser, NULL);
+	recurse  = BeaconDataInt(&parser);
 	
 	if (hostName != NULL && hostName[0] != L'\0')
 	{
@@ -599,7 +387,7 @@ void go(char *args, int len)
 	
 	BofPrintf(&buffer, "  scheduled_tasks:\n");
 
-	hr = EnumScheduledTasks(wHostName);
+	hr = EnumScheduledTasks(wHostName, recurse);
 
 cleanup:
 	if(FAILED(hr))
@@ -621,24 +409,36 @@ cleanup:
 
 int main(int argc, char* argv[])
 {
-	int reqArgCount = 1;
+	// int reqArgCount = 1;
 
 	// Run BOF's entrypoint
 	// To pack arguments for the bof use e.g.: bof::runMocked<int, short, const char*>(go, 6502, 42, "foobar");
 
-	if (argc != reqArgCount)
-	{
-		printf("Usage ... need the args");
-		return 1;
-	}
+	// if (argc != reqArgCount)
+	// {
+	// 	printf("Usage ... need the args");
+	// 	return 1;
+	// }
 
 	if (argc > 1)
 	{
-		bof::runMocked<char*&>(go, argv[1]);
+		if (strcmp(argv[1], "true") == 0)
+		{
+			bof::runMocked<const char*, int>(go, "", 1);
+		}
+		else if (strcmp(argv[1], "false") == 0)
+		{
+			bof::runMocked<const char*, int>(go, "", 0);
+		}
+		else
+		{
+			int recurse = (argc > 2 && strcmp(argv[2], "true") == 0);
+        	bof::runMocked<char*&, int&>(go, argv[1], recurse);
+		}
 	}
 	else
 	{
-		bof::runMocked<const char*>(go, "");
+		bof::runMocked<const char*, int>(go, "", 0);
 	}
 
 	return 0;
