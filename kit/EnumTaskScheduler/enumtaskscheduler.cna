@@ -7,13 +7,16 @@ beacon_command_register(
 
 	"ARGUMENTS:\n" .
     "  [hostName]: The FQDN of the remote host or \"\" for the current system.\n\n" .
+    "  [recurse]: Recurse subfolders to list all tasks (Tends to be quite large).\n\n" .
 
 	"USAGE:\n" .
-    "  enumtaskscheduler <(optional) hostName>\n\n" .
+    "  enumtaskscheduler <(optional) hostName> <(optional) recurse>\n\n" .
 
 	"EXAMPLES:\n" .
     "  enumtaskscheduler\n" .
     "  enumtaskscheduler DB01.example.local\n",
+    "  enumtaskscheduler recurse\n",
+    "  enumtaskscheduler DB01.example.local recurse\n",
     "operatorskit"
 );
 
@@ -42,7 +45,15 @@ alias enumtaskscheduler
 
     if ($recurse eq "")
     {
-        $recurse = 0;
+        if ($host_name eq "recurse")
+        {
+            $host_name = "";
+            $recurse = 1;
+        }
+        else
+        {
+            $recurse = 0;
+        }
     }
     else
     {

@@ -79,7 +79,7 @@ void EnumTasksInFolder(ITaskFolder* pFolder, BOOL recurse)
 							PWSTR wUserId;
 							CopyBSTRToWString(userId, &wUserId);
 
-							BofPrintf(&buffer, "      context (User): %ls\n", userId);
+							BofPrintf(&buffer, "      context: { type: User, name: %ls }\n", userId);
 							
 							HeapFree(GetProcessHeap(), 0, wUserId);
 						}
@@ -88,11 +88,11 @@ void EnumTasksInFolder(ITaskFolder* pFolder, BOOL recurse)
 							hr = pPrincipal->get_GroupId(&groupId);
 							if (SUCCEEDED(hr) && groupId != NULL)
 							{
-								BofPrintf(&buffer, "      context (Group): %ls\n", groupId);
+								BofPrintf(&buffer, "      context: { type: Group, name: %ls }\n", groupId);
 							}
 							else
 							{
-								BofPrintf(&buffer, "      context: Unknown\n");
+								BofPrintf(&buffer, "      context: { type: Unknown, name: Unknown }\n");
 							}
 						}
 
