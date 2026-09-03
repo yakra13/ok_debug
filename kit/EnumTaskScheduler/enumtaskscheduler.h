@@ -3,6 +3,10 @@
 
 #include <Windows.h>
 #include <taskschd.h>
+#include <comutil.h> // C++ for _variant_t
+
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "comsuppw.lib") // C++ for _variant_t
 
 //
 // Macros
@@ -57,9 +61,31 @@ WINBASEAPI BOOL WINAPI KERNEL32$GetComputerNameA(LPSTR lpBuffer,LPDWORD nSize);
 
 WINBASEAPI BSTR WINAPI OLEAUT32$SysAllocString(const OLECHAR *);
 WINBASEAPI VOID WINAPI OLEAUT32$SysFreeString(BSTR);
+
+DECLSPEC_IMPORT int WINAPI KERNEL32$MultiByteToWideChar(UINT CodePage, DWORD dwFlags, _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr, int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar);
+
+WINBASEAPI HANDLE WINAPI KERNEL32$GetProcessHeap();
+WINBASEAPI LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes);
+WINBASEAPI BOOL   WINAPI KERNEL32$HeapFree(HANDLE, DWORD, PVOID);
 #endif
 }
 #ifndef _DEBUG
+#define CoCreateInstance 	OLE32$CoCreateInstance
+#define CoInitializeEx 		OLE32$CoInitializeEx
+#define CoUninitialize 		OLE32$CoUninitialize
 
+#define VariantInit 		OLEAUT32$VariantInit
+#define VariantClear 		OLEAUT32$VariantClear
+
+#define GetComputerNameA 	KERNEL32$GetComputerNameA
+
+#define SysAllocString 		OLEAUT32$SysAllocString
+#define SysFreeString 		OLEAUT32$SysFreeString
+
+#define MultiByteToWideChar KERNEL32$MultiByteToWideChar
+
+#define GetProcessHeap 		KERNEL32$GetProcessHeap
+#define HeapAlloc 			KERNEL32$HeapAlloc
+#define HeapFree 			KERNEL32$HeapFree
 #endif
 

@@ -162,6 +162,20 @@
             "symbolSearchPath": "${workspaceFolder}",
             "preLaunchTask": "Build All ${input:arch} - Debug"
         },
+        {
+            "name": "EnumTaskScheduler",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumtaskscheduler.exe",
+            "args":[
+                "${input:enumtaskscheduler_target}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
     ],
     "inputs": [
         {
@@ -274,6 +288,15 @@
             "description": "Search registry or list minifilter drivers(req elevated privs)",
             "options": ["reg", "driver"],
             "default": "reg"
+        },
+        //------------------------------------------------------------------------------
+        // EnumTaskScheduler Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumtaskscheduler_target",
+            "type": "promptString",
+            "description": "Target fqdn to enumerate, empty for local host.",
+            "default": ""
         },
     ]
 }

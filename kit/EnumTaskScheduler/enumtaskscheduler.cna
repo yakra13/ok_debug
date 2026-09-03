@@ -20,13 +20,12 @@ beacon_command_register(
 alias enumtaskscheduler
 {
     local('$bid %cmd $arg_data $host_name');
-    local('$bof_path $pack_fmt $output_name');
+    local('$bof_path $output_name');
 
     ($bid) = @_;
 
     $bof_path = "enumtaskscheduler.o";
-    $pack_fmt = "Z";
-	$output_name = "schedtasks";
+	$output_name = "enum_task_sched";
 
     %cmd = parse_command(@_);
 
@@ -40,15 +39,9 @@ alias enumtaskscheduler
 
     $host_name = %cmd["args"][0];
 
-    $arg_data = bof_pack($bid, $pack_fmt, $host_name);
+    $arg_data = bof_pack($bid, "Z", $host_name);
 
     blog($bid, "Tasked to enumerate scheduled tasks in the root folder of host: " . $host_name);
 
-    handle_output_beacon_inline_execute(
-        $bid,
-        $bof_path,
-        "go",
-        %cmd,
-        $arg_data
-    );
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd, $arg_data);
 }
