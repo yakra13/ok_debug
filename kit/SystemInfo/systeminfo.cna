@@ -30,10 +30,5 @@ alias systeminfo
 
 	blog($bid, "Tasked to connect to ROOT\\CIMV2 to fetch system information..");
 
-    handle_output_beacon_inline_execute(
-        $bid,
-        $bof_path,
-        "go",
-        %cmd
-    );
+    handle_output_beacon_inline_execute($bid, $bof_path, "go", %cmd);
 }
