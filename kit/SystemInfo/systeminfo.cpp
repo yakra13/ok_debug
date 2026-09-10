@@ -2,6 +2,7 @@
 #include "base\helpers.h"
 #include "systeminfo.h"
 #include "bofoutput.h"
+#include "obfuscate_string.h"
 
 #ifdef _DEBUG
 	#undef DECLSPEC_IMPORT
@@ -29,6 +30,52 @@ HRESULT WmiGetProperty(IWbemClassObject* pObject, LPCWSTR propName, VARIANT* vt)
     return pObject->Get(propName, 0, vt, NULL, NULL);
 }
 
+void FreeSystemInfo(SystemInfo* info)
+{
+    if (!info)
+        return;
+
+    HANDLE hHeap = GetProcessHeap();
+
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.computer_name);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.computer_user_name);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.dns_hostname);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.domain);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.domain_role);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.hypervisor_present);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.manufacturer);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.model);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.part_of_domain);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.pc_system_type);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.system_family);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.system_sku);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->computer_info.system_type);
+
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.build_number);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.last_boot_time);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.locale);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.organization);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.os_configuration);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.os_name);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.registered_user);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.system_drive);
+    // HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.user_sessions);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.version);
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info->os_info.windows_directory);
+
+    if (info->hotfixes.ids)
+    {
+        for (size_t i = 0; i < info->hotfixes.count; i++)
+        {
+            HeapFree(hHeap, HEAP_ZERO_MEMORY, info->hotfixes.ids[i]);
+        }
+
+        HeapFree(hHeap, HEAP_ZERO_MEMORY, info->hotfixes.ids);
+    }
+
+    HeapFree(hHeap, HEAP_ZERO_MEMORY, info);
+}
+
 void go(char* args, int len)
 {
     HRESULT hr = S_OK;
@@ -44,13 +91,16 @@ void go(char* args, int len)
     IID CLSIDWbemLocator = CLSID_WBEM_LOCATOR;
     IID IIDIWbemLocator  = IIDI_WBEM_LOCATOR;
     
-    BSTR strNetworkResource = SysAllocString(L"ROOT\\CIMV2");
-    BSTR strQueryLanguage   = SysAllocString(L"WQL");
-    BSTR strOSQuery         = SysAllocString(L"SELECT * FROM Win32_OperatingSystem");
-    BSTR strComputerQuery   = SysAllocString(L"SELECT * FROM Win32_ComputerSystem");
-    BSTR strQFEngQuery      = SysAllocString(L"SELECT * FROM Win32_QuickFixEngineering");
+    BSTR strNetworkResource = SysAllocString(OBF(L"ROOT\\CIMV2").get());
+    BSTR strQueryLanguage   = SysAllocString(OBF(L"WQL").get());
+    BSTR strOSQuery         = SysAllocString(OBF(L"SELECT * FROM Win32_OperatingSystem").get());
+    BSTR strComputerQuery   = SysAllocString(OBF(L"SELECT * FROM Win32_ComputerSystem").get());
+    BSTR strQFEngQuery      = SysAllocString(OBF(L"SELECT * FROM Win32_QuickFixEngineering").get());
 
     VARIANT vtProp;
+
+    SystemInfo* systemInfo;
+    systemInfo = (SystemInfo*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(SystemInfo));
 
     if (!BofBufferInit(&buffer))
     {
@@ -59,12 +109,6 @@ void go(char* args, int len)
 
     VariantInit(&vtProp);
     
-    // if (bofstart() == FALSE)
-    // {
-    //     BeaconPrintf(CALLBACK_ERROR, "Not enough memory. Failed to allocate output buffer.\n");
-    //     goto cleanup;
-    // }
-
     hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     switch (hr)
     {
@@ -75,78 +119,26 @@ void go(char* args, int len)
         case RPC_E_CHANGED_MODE:
             break;
         default:
-            BeaconPrintf(CALLBACK_ERROR, "Failed to CoInitialize COM object with error: 0x%lx.\n", hr);
+            BeaconPrintf(CALLBACK_ERROR, OBF("Failed to CoInitialize COM object with error: 0x%lx.\n").get(), hr);
             goto cleanup;
     }
 
-    hr = CoInitializeSecurity(
-        NULL,
-        -1,
-        NULL,
-        NULL,
-        RPC_C_AUTHN_LEVEL_DEFAULT,
-        RPC_C_IMP_LEVEL_IMPERSONATE,
-        NULL,
-        EOAC_NONE,
-        NULL);
+    hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+
     if (FAILED(hr) && hr != RPC_E_TOO_LATE)
     {
-        BeaconPrintf(CALLBACK_ERROR, "CoInitializeSecurity failed with error: 0x%lx\n", hr);
+        BeaconPrintf(CALLBACK_ERROR, OBF("CoInitializeSecurity failed with error: 0x%lx\n").get(), hr);
         goto cleanup;
     }
     
-    HR_CHECK(
-        hr,
-        CoCreateInstance(
-            CLSIDWbemLocator,
-            NULL,
-            CLSCTX_INPROC_SERVER,
-            IIDIWbemLocator,
-            (void**)&pLoc
-        )
-    );
+    HR_CHECK(hr, CoCreateInstance(CLSIDWbemLocator, NULL, CLSCTX_INPROC_SERVER, IIDIWbemLocator, (void**)&pLoc));
     
-    HR_CHECK(
-        hr,
-        pLoc->ConnectServer(
-            strNetworkResource,
-            NULL,
-            NULL,
-            NULL,
-            0,
-            NULL,
-            NULL,
-            &pSvc
-        )
+    HR_CHECK(hr, pLoc->ConnectServer(strNetworkResource, NULL, NULL, NULL, 0, NULL, NULL, &pSvc));
+
+    HR_CHECK(hr,
+        CoSetProxyBlanket((IUnknown*)pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE)
     );
 
-    HR_CHECK(
-        hr,
-        CoSetProxyBlanket(
-            (IUnknown*)pSvc,
-            RPC_C_AUTHN_WINNT,
-            RPC_C_AUTHZ_NONE,
-            NULL,
-            RPC_C_AUTHN_LEVEL_CALL,
-            RPC_C_IMP_LEVEL_IMPERSONATE,
-            NULL,
-            EOAC_NONE)
-    );
-
-    // char computerName[MAX_COMPUTERNAME_LENGTH + 1] = {0};
-    // DWORD size = sizeof(computerName);
-
-    // if (GetComputerNameA(computerName, &size))
-    // {
-    //     BofPrintf(&buffer, "%s:\n", computerName);
-    // }
-    // else
-    // {
-    //     BofPrintf(&buffer, "UNKNOWN:\n");
-    // }
-
-    BofPrintf(&buffer, "system_info:\n");
-    
     // =====================================================================================
     // QUERY 1: Win32_OperatingSystem
     // =====================================================================================
@@ -182,72 +174,80 @@ void go(char* args, int len)
                     break;
                 }
 
-                hr = WmiGetProperty(pclsObj, L"Caption", &vtProp);
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "os_name:",
-                    SUCCEEDED(hr) && vtProp.vt == VT_BSTR ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
-
-                hr = WmiGetProperty(pclsObj, L"Version", &vtProp);
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "version:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
-
-                hr = WmiGetProperty(pclsObj, L"ProductType", &vtProp);
-                const WCHAR* _config = FAIL_GET_PROP_STRING;
-
-                if (SUCCEEDED(hr))
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Caption").get(), &vtProp)))
                 {
-                    switch(vtProp.uintVal)
+                    if (vtProp.vt == VT_BSTR)
                     {
-                        case 1:  _config = L"Standalone Workstation"; break;
-                        case 2:  _config = L"Domain Controller";      break;
-                        case 3:  _config = L"Server";                 break;
-                        default: _config = L"Unknown";                break;
+                        systemInfo->os_info.os_name = BSTRToWString(vtProp.bstrVal);
                     }
                 }
 
-                BofPrintf(&buffer, "  %-19s%ls\n", "os_configuration:", _config);
-
-                hr = WmiGetProperty(pclsObj, L"RegisteredUser", &vtProp);
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "registered_user:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
-
-
-                hr = WmiGetProperty(pclsObj, L"WindowsDirectory", &vtProp);
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "windows_directory:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
-
-                hr = WmiGetProperty(pclsObj, L"LastBootUpTime", &vtProp);
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "last_boot_time:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
-
-                // Try to get locale friendly name
-                hr = WmiGetProperty(pclsObj, L"Locale", &vtProp);
-                
-                LCID _lcid = wcstoul(vtProp.bstrVal, NULL, 16);
-                
-                WCHAR _localeName[LOCALE_NAME_MAX_LENGTH];
-
-                if (LCIDToLocaleName(_lcid, _localeName, LOCALE_NAME_MAX_LENGTH, 0))
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Version").get(), &vtProp)))
                 {
-                    BofPrintf(&buffer, "  %-19s%ls\n", "locale:", _localeName);
+                    systemInfo->os_info.version = BSTRToWString(vtProp.bstrVal);
                 }
-                else
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"BuildNumber").get(), &vtProp)))
                 {
-                    BofPrintf(&buffer, "  %-19s%ls\n", "locale:", vtProp.bstrVal);
+                    systemInfo->os_info.build_number = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"ProductType").get(), &vtProp)))
+                {
+                    if (vtProp.uiVal == 1)
+                        systemInfo->os_info.os_configuration = WStringToHeap(OBF(L"Standalone Workstation").get());
+                    else if (vtProp.uiVal == 2)
+                        systemInfo->os_info.os_configuration = WStringToHeap(OBF(L"Domain Controller").get());
+                    else if (vtProp.uiVal == 3)
+                        systemInfo->os_info.os_configuration = WStringToHeap(OBF(L"Server").get());
+                    else
+                        systemInfo->os_info.os_configuration = WStringToHeap(OBF(L"Unknown").get());
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"RegisteredUser").get(), &vtProp)))
+                {
+                    systemInfo->os_info.registered_user = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"NumberOfUsers").get(), &vtProp)))
+                {
+                    systemInfo->os_info.user_sessions = vtProp.uintVal; 
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"WindowsDirectory").get(), &vtProp)))
+                {
+                    systemInfo->os_info.windows_directory = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"SystemDrive").get(), &vtProp)))
+                {
+                    systemInfo->os_info.system_drive = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Organization").get(), &vtProp)))
+                {
+                    systemInfo->os_info.organization = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"LastBootUpTime").get(), &vtProp)))
+                {
+                    systemInfo->os_info.last_boot_time = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Locale").get(), &vtProp)))
+                {
+                    LCID _lcid = wcstoul(vtProp.bstrVal, NULL, 16);
+                    
+                    WCHAR _localeName[LOCALE_NAME_MAX_LENGTH];
+
+                    if (LCIDToLocaleName(_lcid, _localeName, LOCALE_NAME_MAX_LENGTH, 0))
+                    {
+                        systemInfo->os_info.locale = WStringToHeap(_localeName);
+                    }
+                    else
+                    {
+                        systemInfo->os_info.locale = BSTRToWString(vtProp.bstrVal);
+                    }
                 }
                 
                 SAFE_INTERFACE_RELEASE(pclsObj);
@@ -296,41 +296,102 @@ void go(char* args, int len)
                     break;
                 }
 
-                hr = WmiGetProperty(pclsObj, L"Model", &vtProp);
-                // internal_printf(
-                //     "    %-19s%ls\n",
-                //     "model:",
-                //     SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                // );
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "model:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Model").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.model = BSTRToWString(vtProp.bstrVal);
+                }
                 
-                hr = WmiGetProperty(pclsObj, L"SystemType", &vtProp);
-                // internal_printf(
-                //     "    %-19s%ls\n",
-                //     "system_type:",
-                //     SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                // );
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "system_type:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"SystemType").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.system_type = BSTRToWString(vtProp.bstrVal);
+                }
                 
-                hr = WmiGetProperty(pclsObj, L"Domain", &vtProp);
-                // internal_printf(
-                //     "    %-19s%ls\n",
-                //     "domain:",
-                //     SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                // );
-                BofPrintf(&buffer,
-                    "  %-19s%ls\n",
-                    "domain:",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Domain").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.domain = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Manufacturer").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.manufacturer = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"DNSHostName").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.dns_hostname = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"Name").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.computer_name = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"SystemFamily").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.system_family = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"SystemSKUNumber").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.system_sku = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"UserName").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.computer_user_name = BSTRToWString(vtProp.bstrVal);
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"PartOfDomain").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.part_of_domain = vtProp.boolVal ? WStringToHeap(L"true") : WStringToHeap(L"false");
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"HypervisorPresent").get(), &vtProp)))
+                {
+                    systemInfo->computer_info.hypervisor_present = vtProp.boolVal ? WStringToHeap(L"true") : WStringToHeap(L"false");
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"DomainRole").get(), &vtProp)))
+                {
+                    if (vtProp.uiVal == 0)
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Standalone Workstation").get());
+                    else if (vtProp.uiVal == 1)
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Member Workstation").get());
+                    else if (vtProp.uiVal == 2)
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Standalone Server").get());
+                    else if (vtProp.uiVal == 3)
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Member Server").get());
+                    else if (vtProp.uiVal == 4)
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Backup Domain Controller").get());
+                    else if (vtProp.uiVal == 5)
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Primary Domain Controller").get());
+                    else
+                        systemInfo->computer_info.domain_role = WStringToHeap(OBF(L"Unknown").get());
+                }
+
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"PCSystemType").get(), &vtProp)))
+                {
+                    if (vtProp.uiVal == 0)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Unspecified").get());
+                    else if (vtProp.uiVal == 1)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Desktop").get());
+                    else if (vtProp.uiVal == 2)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Mobile").get());
+                    else if (vtProp.uiVal == 3)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Workstation").get());
+                    else if (vtProp.uiVal == 4)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Enterprise Server").get());
+                    else if (vtProp.uiVal == 5)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"SOHO Server").get());
+                    else if (vtProp.uiVal == 6)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Appliance PC").get());
+                    else if (vtProp.uiVal == 7)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Performance Server").get());
+                    else if (vtProp.uiVal == 8)
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Slate").get());
+                    else
+                        systemInfo->computer_info.pc_system_type = WStringToHeap(OBF(L"Unspecified").get());
+                }
 
                 SAFE_INTERFACE_RELEASE(pclsObj);
             }
@@ -369,7 +430,7 @@ void go(char* args, int len)
         
         if (SUCCEEDED(hr))
         {
-            BofPrintf(&buffer, "  hotfix_ids:\n");
+            HANDLE hHeap = GetProcessHeap();
             
             while (pEnumerator)
             {
@@ -379,18 +440,81 @@ void go(char* args, int len)
                     break;
                 }
 
-                hr = WmiGetProperty(pclsObj, L"HotFixID", &vtProp);
-                BofPrintf(
-                    &buffer,
-                    "    - %ls\n",
-                    SUCCEEDED(hr) ? vtProp.bstrVal : FAIL_GET_PROP_STRING
-                );
+                if (SUCCEEDED(WmiGetProperty(pclsObj, OBF(L"HotFixID").get(), &vtProp)) && vtProp.vt == VT_BSTR)
+                {
+                   PWCHAR id = BSTRToWString(vtProp.bstrVal);
+                   PWCHAR* newIds;
+                   
+                   if (!id)
+                   {
+                        SAFE_INTERFACE_RELEASE(pclsObj);        
+                        continue;
+                   }
+
+                   if (systemInfo->hotfixes.ids == NULL)
+                   {
+                        newIds = (PWCHAR*)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, sizeof(PWCHAR));
+                   }
+                   else
+                   {
+                        newIds = (PWCHAR*)HeapReAlloc(
+                            hHeap,
+                            HEAP_ZERO_MEMORY,
+                            systemInfo->hotfixes.ids,
+                            (systemInfo->hotfixes.count + 1) * sizeof(PWCHAR)
+                        );
+                   }
+
+                   if (newIds)
+                   {
+                        systemInfo->hotfixes.ids = newIds;
+
+                        systemInfo->hotfixes.ids[systemInfo->hotfixes.count] = id;
+
+                        systemInfo->hotfixes.count++;
+                   }
+                   else
+                   {
+                        HeapFree(hHeap, 0, id);
+                   }
+                }
             
                 SAFE_INTERFACE_RELEASE(pclsObj);
             }
 
             SAFE_INTERFACE_RELEASE(pclsObj);
         }
+    }
+
+    // Print output
+    BofPrintf(&buffer, OBF("system_info:\n").get());
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("os_name:").get(),           YAML_STR(systemInfo->os_info.os_name));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("version:").get(),           YAML_STR(systemInfo->os_info.version));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("build_number:").get(),      YAML_STR(systemInfo->os_info.build_number));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("os_configuration:").get(),  YAML_STR(systemInfo->os_info.os_configuration));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("registered_user:").get(),   YAML_STR(systemInfo->os_info.registered_user));
+    BofPrintf(&buffer, "  %-20s%u\n",  OBF("user_sessions:").get(),     systemInfo->os_info.user_sessions);
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("windows_directory:").get(), YAML_STR(systemInfo->os_info.windows_directory));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("system_drive:").get(),      YAML_STR(systemInfo->os_info.system_drive));
+
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("computer_name:").get(),      YAML_STR(systemInfo->computer_info.computer_name));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("computer_user_name:").get(), YAML_STR(systemInfo->computer_info.computer_user_name));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("hypervisor_present:").get(), YAML_STR(systemInfo->computer_info.hypervisor_present));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("dns_hostname:").get(),       YAML_STR(systemInfo->computer_info.dns_hostname));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("part_of_domain:").get(),     YAML_STR(systemInfo->computer_info.part_of_domain));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("domain:").get(),             YAML_STR(systemInfo->computer_info.domain));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("domain_role:").get(),        YAML_STR(systemInfo->computer_info.domain_role));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("manufacturer:").get(),       YAML_STR(systemInfo->computer_info.manufacturer));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("model:").get(),              YAML_STR(systemInfo->computer_info.model));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("pc_system_type:").get(),     YAML_STR(systemInfo->computer_info.pc_system_type));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("system_family:").get(),      YAML_STR(systemInfo->computer_info.system_family));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("system_sku:").get(),         YAML_STR(systemInfo->computer_info.system_sku));
+    BofPrintf(&buffer, "  %-20s%ls\n", OBF("system_type:").get(),        YAML_STR(systemInfo->computer_info.system_type));
+
+    BofPrintf(&buffer, OBF("  hotfix_ids:\n").get());
+    for (size_t i = 0; i < systemInfo->hotfixes.count; i++)
+    {
+        BofPrintf(&buffer, "    - %ls\n", systemInfo->hotfixes.ids[i]);
     }
 
 cleanup:
@@ -411,6 +535,8 @@ cleanup:
     {
         CoUninitialize();
     }
+
+    FreeSystemInfo(systemInfo);
     
     BofBufferFree(&buffer);
 }

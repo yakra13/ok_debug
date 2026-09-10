@@ -4,6 +4,53 @@
 #include <wbemidl.h>
 
 #pragma comment(lib, "ole32.lib")
+
+typedef struct
+{
+    PWCHAR* ids;
+    size_t count;
+} Hotfixes;
+
+typedef struct
+{
+    PWCHAR os_name;
+    PWCHAR version;
+    PWCHAR build_number;
+    PWCHAR os_configuration;
+    PWCHAR registered_user;
+    UINT32 user_sessions;
+    PWCHAR windows_directory;
+    PWCHAR system_drive;
+    PWCHAR organization;
+    PWCHAR last_boot_time;
+    PWCHAR locale;
+}  OperatingSystemInfo;
+
+typedef struct
+{
+    PWCHAR model;
+    PWCHAR system_type;
+    PWCHAR domain;
+    PWCHAR manufacturer;
+    PWCHAR dns_hostname;
+    PWCHAR computer_name;
+    PWCHAR system_family;
+    PWCHAR system_sku;
+    PWCHAR computer_user_name;
+    PWCHAR part_of_domain;
+    PWCHAR hypervisor_present;
+    PWCHAR domain_role;
+    PWCHAR pc_system_type;
+} ComputerSystemInfo;
+
+typedef struct
+{
+    OperatingSystemInfo os_info;
+    ComputerSystemInfo computer_info;
+    Hotfixes hotfixes;
+} SystemInfo;
+
+
 //
 // Imports
 //

@@ -8,6 +8,8 @@
 
 #pragma comment(lib, "OleAut32.lib")
 
+#define YAML_STR(x) ((x) ? (x) : L"null")
+
 extern "C"
 {
     #ifndef _DEBUG
@@ -254,5 +256,65 @@ extern "C"
         (*dst)[len] = L'\0';
 
         return S_OK;
+    }
+
+    /// @brief Copies a BSTR to a PWCHAR. Caller must call HeapFree.
+    /// @param src 
+    /// @return PWCHAR
+    PWCHAR BSTRToWString(BSTR src)
+    {
+        SIZE_T len;
+        PWCHAR out = NULL;
+
+        if (src == NULL)
+        {
+            return NULL;
+        }
+
+        len = SysStringLen(src);
+
+        out = (PWCHAR)HeapAlloc(
+            GetProcessHeap(),
+            HEAP_ZERO_MEMORY,
+            (len + 1) * sizeof(WCHAR)
+        );
+
+        if (out == NULL)
+        {
+            return NULL;
+        }
+        
+        memcpy(out, src, len * sizeof(WCHAR));
+
+        // Ensure null terminator
+        (out)[len] = L'\0';
+
+        return out;
+    }
+
+    PWCHAR WStringToHeap(const WCHAR* src)
+    {
+        if (src == NULL)
+        {
+            return NULL;
+        }
+
+        SIZE_T len = wcslen(src);
+
+        PWCHAR out = (PWCHAR)HeapAlloc(
+            GetProcessHeap(),
+            HEAP_ZERO_MEMORY,
+            (len + 1) * sizeof(WCHAR)
+        );
+
+        if (out == NULL)
+        {
+            return NULL;
+        }
+
+        memcpy(out, src, (len + 1) * sizeof(WCHAR));
+        out[len] = L'\0';
+
+        return out;
     }
 }
