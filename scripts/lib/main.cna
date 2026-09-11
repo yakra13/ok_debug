@@ -9,8 +9,8 @@ $SUPPORTS_FILE_OUT_MESSAGE = "Supports writing to file:\n" .
 "\n";
 
 $CMD_REDIRECT_STDOUT = 1;
-$CMD_APPEND_FILE = 2;
-$CMD_OUT_CONSOLE = 4;
+$CMD_APPEND_FILE     = 2;
+$CMD_OUT_CONSOLE     = 4;
 
 %REDIRECT_LOOKUP = %(
     >   => $CMD_REDIRECT_STDOUT,
