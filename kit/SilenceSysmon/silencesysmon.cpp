@@ -29,7 +29,8 @@ BOOL SetPrivilege(LPCTSTR lpszPrivilege, BOOL bEnablePrivilege)
 	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken))
 		return FALSE;
 
-    if (!LookupPrivilegeValueW(NULL, lpszPrivilege, &luid))
+	// TODO: not technically correct to just cast to LPCWSTR
+    if (!LookupPrivilegeValueW(NULL, (LPCWSTR)lpszPrivilege, &luid))
 		return FALSE;
 
     tp.PrivilegeCount = 1;

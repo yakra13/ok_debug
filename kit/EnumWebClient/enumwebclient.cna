@@ -17,12 +17,14 @@ beacon_command_register(
 	"operatorskit"
 );
 	
-alias enumwebclient {
+alias enumwebclient
+{
     $bid = $1;
 	$path = $2;
 	$debug = $3;
 	
-	if ($path eq "") {
+	if ($path eq "")
+	{
 		berror($bid, "Please specify the path on your own attacker system to the file containing the list with newline separated hostnames.\n");
 		return;
 	}

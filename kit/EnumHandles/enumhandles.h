@@ -98,6 +98,3 @@ extern "C" {
     #define PathFindFileNameA           SHLWAPI$PathFindFileNameA
     #define StrStrIW                    SHLWAPI$StrStrIW
 #endif
-
-
-

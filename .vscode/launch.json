@@ -178,6 +178,35 @@
             "preLaunchTask": "Build All ${input:arch} - Debug"
         },
         {
+            "name": "EnumWebClient",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/enumwebclient.exe",
+            "args":[
+                "${input:enumwebclient_filepath}",
+                "${input:enumwebclient_debug}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
+        {
+            "name": "SilenceSysmon",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/debug/${input:arch}/silencesysmon.exe",
+            "args":[
+                "${input:silencesysmon_pid}",
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "symbolSearchPath": "${workspaceFolder}",
+            "preLaunchTask": "Build All ${input:arch} - Debug"
+        },
+        {
             "name": "SystemInfo",
             "type": "cppvsdbg",
             "request": "launch",
@@ -316,6 +345,30 @@
             "description": "true list all tasks false list root tasks",
             "options": ["true", "false"],
             "default": "false"
+        },
+        //------------------------------------------------------------------------------
+        // EnumWebClient Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "enumwebclient_filepath",
+            "type": "promptString",
+            "description": "Path to file containing hostname targets",
+            "default": "kit/EnumWebClient/testing.txt"
+        },
+        {
+            "id": "enumwebclient_debug",
+            "type": "promptString",
+            "description": "'debug' to include unreachable hosts",
+            "default": "debug"
+        },
+        //------------------------------------------------------------------------------
+        // SilenceSysmon Args
+        //------------------------------------------------------------------------------
+        {
+            "id": "silencesysmon_pid",
+            "type": "promptString",
+            "description": "Target pid associated with Sysmon.",
+            "default": ""
         },
     ]
 }
