@@ -1,7 +1,7 @@
 #pragma once
 #include "beacon.h"
 #include "base/helpers.h"
-#include <Windows.h>
+// #include <Windows.h>
 #include <stdio.h>
 
 #include <oleauto.h>
@@ -12,27 +12,37 @@
 
 extern "C"
 {
-    #ifndef _DEBUG
-        WINBASEAPI LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes);
-        WINBASEAPI LPVOID WINAPI KERNEL32$HeapReAlloc(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem, SIZE_T dwBytes);
-        WINBASEAPI BOOL   WINAPI KERNEL32$HeapFree(HANDLE, DWORD, PVOID);
-        WINBASEAPI HANDLE WINAPI KERNEL32$GetProcessHeap();
+#ifndef _DEBUG
+    WINBASEAPI LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes);
+    WINBASEAPI LPVOID WINAPI KERNEL32$HeapReAlloc(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem, SIZE_T dwBytes);
+    WINBASEAPI BOOL   WINAPI KERNEL32$HeapFree(HANDLE, DWORD, PVOID);
+    WINBASEAPI HANDLE WINAPI KERNEL32$GetProcessHeap();
 
-        WINBASEAPI PVOID WINAPI MSVCRT$memcpy(void* dest, const void* src, size_t count);
-        WINBASEAPI INT   WINAPI MSVCRT$vsnprintf(char* buffer, size_t count, const char* format, va_list arg);
-        
-        WINBASEAPI UINT WINAPI OLEAUT32$SysStringLen(BSTR bstr);
+    WINBASEAPI PVOID WINAPI MSVCRT$memcpy(void* dest, const void* src, size_t count);
+    WINBASEAPI INT   WINAPI MSVCRT$vsnprintf(char* buffer, size_t count, const char* format, va_list arg);
+    WINBASEAPI size_t __cdecl MSVCRT$wcslen(const wchar_t *str);
+    
+    WINBASEAPI UINT WINAPI OLEAUT32$SysStringLen(BSTR bstr);
+#endif
+}
 
-        #define HeapAlloc      KERNEL32$HeapAlloc      
-        #define HeapReAlloc    KERNEL32$HeapReAlloc    
-        #define HeapFree       KERNEL32$HeapFree       
-        #define GetProcessHeap KERNEL32$GetProcessHeap 
 
-        #define memcpy         MSVCRT$memcpy           
-        #define vsnprintf      MSVCRT$vsnprintf        
+#ifndef _DEBUG
+    #define HeapAlloc      KERNEL32$HeapAlloc      
+    #define HeapReAlloc    KERNEL32$HeapReAlloc    
+    #define HeapFree       KERNEL32$HeapFree       
+    #define GetProcessHeap KERNEL32$GetProcessHeap 
 
-        #define SysStringLen   OLEAUT32$SysStringLen
-    #endif
+    #define memcpy         MSVCRT$memcpy           
+    #define vsnprintf      MSVCRT$vsnprintf        
+
+    #define SysStringLen   OLEAUT32$SysStringLen
+    #define wcslen         MSVCRT$wcslen
+#endif
+
+extern "C"
+{
+    
 
     #ifndef BOF_OUTPUT_BUFFER_SIZE
         #define BOF_OUTPUT_BUFFER_SIZE 8192
@@ -318,3 +328,4 @@ extern "C"
         return out;
     }
 }
+

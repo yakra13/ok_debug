@@ -1,6 +1,5 @@
 #ifndef _SLEEPMASK_H_
 #define _SLEEPMASK_H_
-
 #include <windows.h>
 #include "beacon.h"
 #include "beacon_gate.h"
